@@ -1,0 +1,27 @@
+[project]
+name = "zotero-rag-desk"
+version = "0.1.0"
+description = "PySide6 desktop shell for exploring Zotero references alongside AI-powered embeddings."
+readme = "README.md"
+authors = [
+    {name = "Agile Programming Team", email = "agile@example.com"}
+]
+requires-python = ">=3.13,<4"
+dependencies = [
+    "PySide6>=6.5",
+    "pyinstaller>=5.14",
+]
+classifiers = [
+    "Framework :: PySide",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+zoterorag = "zoterorag.main:main"
+zr-build = "scripts.build:main"
+
+[build-system]
+requires = ["setuptools>=63.0", "wheel"]
+build-backend = "setuptools.build_meta"
