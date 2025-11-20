@@ -96,3 +96,44 @@ def test_get_all_items_missing_database_raises(tmp_path: Path) -> None:
     manager = ZoteroManager(zotero_path=tmp_path)
     with pytest.raises(ZoteroDatabaseError):
         manager.get_all_items()
+
+
+def test_get_pdf_attachments_resolves_storage_paths(tmp_path: Path) -> None:
+    db_dir = tmp_path / "zotero"
+    storage_dir = db_dir / "storage" / "ABC123"
+    storage_dir.mkdir(parents=True)
+    pdf_path = storage_dir / "paper.pdf"
+    pdf_path.write_text("dummy")
+
+    db_file = db_dir / "zotero.sqlite"
+    connection = sqlite3.connect(db_file)
+    cursor = connection.cursor()
+    
+    # Create items table with key field
+    cursor.execute(
+        "CREATE TABLE items(" \
+        "itemID INTEGER PRIMARY KEY, " \
+        "key TEXT)"
+    )
+    cursor.execute(
+        "INSERT INTO items(itemID, key) VALUES (2, 'ABC123')"
+    )
+    
+    cursor.execute(
+        "CREATE TABLE itemAttachments(" \
+        "itemID INTEGER PRIMARY KEY, " \
+        "parentItemID INTEGER, " \
+        "linkMode INT, " \
+        "contentType TEXT, " \
+        "path TEXT)"
+    )
+    cursor.execute(
+        "INSERT INTO itemAttachments(itemID, parentItemID, linkMode, contentType, path) "\
+        "VALUES (2, 1, 0, 'application/pdf', 'storage:paper.pdf')"
+    )
+    connection.commit()
+    connection.close()
+
+    manager = ZoteroManager(zotero_path=db_dir)
+    attachments = manager.get_pdf_attachments(1)
+    assert attachments == [pdf_path]

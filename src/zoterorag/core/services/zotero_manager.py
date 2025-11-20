@@ -165,3 +165,59 @@ class ZoteroManager:
         )
         rows = connection.execute(query, names).fetchall()
         return {row["fieldName"]: row["fieldID"] for row in rows}
+
+    def get_pdf_attachments(self, item_id: int) -> list[Path]:
+        """Return resolved PDF attachment paths for the provided Zotero item."""
+
+        db_file = self._get_database_file()
+        if not db_file:
+            raise ZoteroDatabaseError("Zotero database not configured or missing.")
+
+        try:
+            with self._connect_to_database(db_file) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    "SELECT ia.path, i.key "
+                    "FROM itemAttachments ia "
+                    "JOIN items i ON i.itemID = ia.itemID "
+                    "WHERE ia.parentItemID = ? AND ia.path IS NOT NULL "
+                    "AND (ia.contentType = 'application/pdf' OR ia.path LIKE '%.pdf%')",
+                    (item_id,),
+                ).fetchall()
+        except sqlite3.OperationalError as error:
+            logger.exception("Unable to open Zotero database for attachments")
+            raise ZoteroDatabaseError(
+                f"Failed to open Zotero database: {error}"
+            ) from error
+
+        resolved_paths: list[Path] = []
+        for row in rows:
+            candidate = self._resolve_attachment_path(row["path"], row["key"])
+            if candidate and candidate.exists():
+                resolved_paths.append(candidate)
+
+        return resolved_paths
+
+    def _resolve_attachment_path(self, stored_path: str | None, attachment_key: str | None = None) -> Path | None:
+        if not stored_path:
+            return None
+
+        stored_path = stored_path.strip()
+        if stored_path.startswith("storage:"):
+            storage_dir = self._get_storage_directory()
+            if not storage_dir or not attachment_key:
+                return None
+
+            # Extract filename from storage:filename.pdf format
+            filename = stored_path.split("storage:", 1)[1].lstrip("/\\")
+            # Use attachment key as subdirectory: storage/{key}/{filename}
+            return (storage_dir / attachment_key / filename).expanduser()
+
+        return Path(stored_path).expanduser()
+
+    def _get_storage_directory(self) -> Path | None:
+        if not self._zotero_path:
+            return None
+
+        storage_dir = (self._zotero_path / "storage").expanduser()
+        return storage_dir if storage_dir.is_dir() else None
