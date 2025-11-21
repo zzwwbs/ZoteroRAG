@@ -26,6 +26,10 @@ class FakeSettings:
     def load_settings(self) -> AppSettings:
         """Return default settings for testing."""
         return AppSettings()
+    
+    def get_api_key(self) -> str | None:
+        """Return None for testing (no API key configured)."""
+        return None
 
 
 class FakeSearchService:

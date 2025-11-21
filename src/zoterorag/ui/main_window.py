@@ -8,7 +8,7 @@ import subprocess
 import sys
 import logging
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QMessageBox,
@@ -16,6 +16,9 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QPushButton,
+    QSpinBox,
+    QLabel,
 )
 
 from ..config.settings_manager import SettingsManager
@@ -28,6 +31,7 @@ from ..core.services.search_service import (
     SearchService,
     SearchServiceError,
 )
+from ..core.services.ai_service import AIService, AIServiceError, UnauthorizedAIServiceError
 from ..core.services.vector_db_manager import VectorDBManager
 from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
@@ -66,6 +70,7 @@ class MainWindow(QMainWindow):
         self._metadata_manager = MetadataDBManager()
         self._vector_manager = VectorDBManager(dimension=1536)
         self._embedding_client = EmbeddingClient(self._settings_manager)
+        self._ai_service = AIService(self._settings_manager)
         self._search_service = search_service or SearchService(
             self._embedding_client,
             self._vector_manager,
@@ -97,6 +102,22 @@ class MainWindow(QMainWindow):
         self._paper_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
         self._chunk_list_view = ChunkListView()
         self._chunk_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
+        self._analyze_button = QPushButton("Analyze with AI")
+        self._analyze_button.clicked.connect(self._handle_analyze_clicked)
+        self._analyze_button.setEnabled(False)
+        self._chunk_count = QSpinBox()
+        self._chunk_count.setRange(1, 50)
+        self._chunk_count.setValue(10)
+        self._chunk_count.setEnabled(False)
+        self._analysis_label = QLabel()
+        self._analysis_label.setWordWrap(True)
+        self._analysis_label.setMinimumHeight(80)
+        self._analysis_label.setTextInteractionFlags(
+            self._analysis_label.textInteractionFlags() | Qt.TextSelectableByMouse
+        )
+        self._analysis_loading = QLabel()
+        self._analysis_loading.setVisible(False)
+        self._analyze_button.setProperty("busy", False)
 
         self._main_container = QWidget()
         main_layout = QVBoxLayout(self._main_container)
@@ -105,6 +126,11 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self._indexing_scope_view)
         main_layout.addWidget(self._paper_list_view)
         main_layout.addWidget(self._chunk_list_view)
+        main_layout.addWidget(QLabel("Chunks:"))
+        main_layout.addWidget(self._chunk_count)
+        main_layout.addWidget(self._analyze_button)
+        main_layout.addWidget(self._analysis_loading)
+        main_layout.addWidget(self._analysis_label)
 
         self._stack.addWidget(self._onboarding_view)
         self._stack.addWidget(self._main_container)
@@ -196,11 +222,14 @@ class MainWindow(QMainWindow):
     def _handle_search_result(self, result: SearchResult) -> None:
         self._state.search_matches = result.matches or []
         self._state.selected_paper = None
+        self._state.current_query = result.query
         self._refresh_results_views()
         match_count = len(self._state.search_matches)
         self._search_view.set_status(
             f"Found {match_count} results (embedding {len(result.query_embedding)} dims)."
         )
+        self._analysis_label.setText("")
+        self._update_analysis_controls()
 
     def _handle_search_error(self, message: str) -> None:
         self._search_view.set_error(message)
@@ -208,7 +237,44 @@ class MainWindow(QMainWindow):
 
     def _handle_search_finished(self) -> None:
         self._search_view.set_busy(False)
+        self._update_analysis_controls()
 
+    def _handle_analyze_clicked(self) -> None:
+        if not self._state.search_matches:
+            self._analysis_label.setText("No results to analyze.")
+            return
+        if not self._state.current_query:
+            self._analysis_label.setText("No query available to analyze.")
+            return
+        top_n = self._chunk_count.value()
+        worker = _AIAnalyzeRunnable(
+            self._ai_service,
+            self._state.current_query,
+            self._state.search_matches,
+            top_n,
+        )
+        worker.signals.result.connect(self._handle_analysis_result)
+        worker.signals.error.connect(self._handle_analysis_error)
+        worker.signals.finished.connect(self._handle_analysis_finished)
+        self._set_analysis_busy(True)
+        self._analysis_loading.setVisible(True)
+        self._analysis_loading.setText("Analyzing with AI...")
+        self._analysis_label.setText("")
+        self._thread_pool.start(worker)
+
+    def _handle_analysis_result(self, text: str) -> None:
+        self._analysis_label.setText(text)
+
+    def _handle_analysis_error(self, message: str) -> None:
+        self._analysis_label.setText(f"Analysis failed: {message}")
+
+    def _handle_analysis_finished(self) -> None:
+        self._set_analysis_busy(False)
+        self._analysis_loading.setVisible(False)
+
+    def _set_analysis_busy(self, busy: bool) -> None:
+        self._analyze_button.setProperty("busy", busy)
+        self._update_analysis_controls()
     def _refresh_results_views(self) -> None:
         """Update paper and chunk lists from current state."""
         documents: list = []
@@ -224,6 +290,7 @@ class MainWindow(QMainWindow):
             self._state.search_matches,
             selected_document_id=self._state.selected_paper.id if self._state.selected_paper else None,
         )
+        self._update_analysis_controls()
 
     def _on_paper_selected(self, document) -> None:
         if document is None:
@@ -236,6 +303,7 @@ class MainWindow(QMainWindow):
     def _clear_selection(self) -> None:
         self._state.selected_paper = None
         self._chunk_list_view.update_chunks(self._state.search_matches, None)
+        self._update_analysis_controls()
 
     def _open_pdf_for_document(self, document) -> None:
         if not document or not document.pdf_file_path:
@@ -280,6 +348,24 @@ class MainWindow(QMainWindow):
         """Load enable_ai_analysis flag from persisted settings."""
         settings = self._settings_manager.load_settings()
         self._state.enable_ai_analysis = settings.enable_ai_analysis
+        self._update_analysis_controls()
+
+    def _update_analysis_controls(self) -> None:
+        """Update visibility and enabled state of AI analysis controls."""
+        can_analyze = bool(self._settings_manager.get_api_key()) and self._state.enable_ai_analysis
+        has_results = bool(self._state.search_matches)
+        busy = bool(self._analyze_button.property("busy"))
+        enabled = can_analyze and has_results and not busy
+        self._analyze_button.setVisible(can_analyze)
+        self._chunk_count.setVisible(can_analyze)
+        self._analysis_loading.setVisible(busy)
+        self._analyze_button.setEnabled(enabled)
+        self._chunk_count.setEnabled(enabled)
+        if not can_analyze:
+            self._analysis_label.setText("")
+            self._analysis_loading.setText("AI analysis unavailable; configure settings.")
+        else:
+            self._analysis_loading.setText("")
 
 
 class _IndexingWorkerSignals(QObject):
@@ -349,3 +435,38 @@ class _OpenPdfRunnable(QRunnable):
                 subprocess.Popen(["xdg-open", str(self._pdf_path)])
         except Exception:
             logger.exception("Failed to open PDF: %s", self._pdf_path)
+
+
+class _AIWorkerSignals(QObject):
+    result = Signal(str)
+    error = Signal(str)
+    finished = Signal()
+
+
+class _AIAnalyzeRunnable(QRunnable):
+    """Background task runner for AI analysis."""
+
+    def __init__(
+        self,
+        service: AIService,
+        query: str,
+        matches: list[SearchMatch],
+        top_n: int,
+    ) -> None:
+        super().__init__()
+        self._service = service
+        self._query = query
+        self._matches = matches
+        self._top_n = top_n
+        self.signals = _AIWorkerSignals()
+
+    def run(self) -> None:
+        try:
+            result = self._service.analyze_chunks(self._query, self._matches, self._top_n)
+            self.signals.result.emit(result)
+        except (AIServiceError, UnauthorizedAIServiceError) as error:
+            self.signals.error.emit(str(error))
+        except Exception as error:  # pragma: no cover - safeguard
+            self.signals.error.emit(str(error))
+        finally:
+            self.signals.finished.emit()
