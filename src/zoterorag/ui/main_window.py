@@ -7,6 +7,8 @@ import os
 import subprocess
 import sys
 import logging
+import shutil
+from datetime import datetime
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Qt
 from PySide6.QtGui import QAction
@@ -20,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QLabel,
+    QFileDialog,
 )
 
 from ..config.settings_manager import SettingsManager
@@ -94,6 +97,7 @@ class MainWindow(QMainWindow):
         self._search_view = SearchView()
         self._search_view.search_triggered.connect(self._on_search)
         self._search_view.copy_to_chatgpt_requested.connect(self._handle_copy_to_chatgpt)
+        self._search_view.export_pdfs_requested.connect(self._handle_export_pdfs)
 
         self._library_view = LibraryView()
         self._indexing_scope_view = IndexingScopeView()
@@ -290,6 +294,26 @@ class MainWindow(QMainWindow):
     def _set_analysis_busy(self, busy: bool) -> None:
         self._analyze_button.setProperty("busy", busy)
         self._update_analysis_controls()
+
+    def _handle_export_pdfs(self) -> None:
+        if not self._state.search_matches:
+            QMessageBox.information(self, "Export PDFs", "No search results to export.")
+            return
+
+        destination = QFileDialog.getExistingDirectory(self, "Select Destination Folder")
+        if not destination:
+            return
+
+        worker = _ExportPdfRunnable(destination, self._state.search_matches, self._state.selected_paper)
+        worker.signals.success.connect(self._handle_export_success)
+        worker.signals.error.connect(self._handle_export_error)
+        self._thread_pool.start(worker)
+
+    def _handle_export_success(self, folder: str) -> None:
+        QMessageBox.information(self, "Export PDFs", f"Exported PDFs to: {folder}")
+
+    def _handle_export_error(self, message: str) -> None:
+        QMessageBox.critical(self, "Export PDFs", message)
     def _refresh_results_views(self) -> None:
         """Update paper and chunk lists from current state."""
         documents: list = []
@@ -485,6 +509,52 @@ class _AIAnalyzeRunnable(QRunnable):
             self.signals.error.emit(str(error))
         finally:
             self.signals.finished.emit()
+
+
+class _ExportSignals(QObject):
+    success = Signal(str)
+    error = Signal(str)
+
+
+class _ExportPdfRunnable(QRunnable):
+    """Background task to copy PDFs from matches into a destination subfolder."""
+
+    def __init__(self, destination: str, matches: list[SearchMatch], selected_paper) -> None:
+        super().__init__()
+        self._destination = destination
+        self._matches = matches
+        self._selected_paper = selected_paper
+        self.signals = _ExportSignals()
+
+    def run(self) -> None:
+        try:
+            self._perform_export()
+        except Exception as error:  # pragma: no cover - safeguard
+            self.signals.error.emit(str(error))
+
+    def _perform_export(self) -> None:
+        unique_paths: dict[str, Path] = {}
+        for match in self._matches:
+            doc = match.document
+            if self._selected_paper and (not doc or doc.id != self._selected_paper.id):
+                continue
+            if doc and doc.pdf_file_path:
+                p = Path(doc.pdf_file_path).expanduser()
+                if p.exists():
+                    unique_paths[p.name] = p
+
+        if not unique_paths:
+            self.signals.error.emit("No PDF files found to export.")
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        target_dir = Path(self._destination) / f"zotero-export-{timestamp}"
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for name, src in unique_paths.items():
+            shutil.copy2(src, target_dir / name)
+
+        self.signals.success.emit(str(target_dir))
 
 
 def format_chatgpt_prompt(
