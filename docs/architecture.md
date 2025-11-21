@@ -1062,7 +1062,18 @@ sequenceDiagram
 #### Middleware/Guards
 This concept is handled in the UI layer. UI components like buttons ("Analyze with AI") will be enabled or disabled based on whether an API key has been configured in the `SettingsManager`. There is no backend middleware for this.
 
-## Unified Project Structure
+## Project Source Tree
+
+The project follows a standard Python monorepo structure, designed for clarity and maintainability. Below is an overview of the top-level directories and their purposes:
+
+*   `.github/`: Contains GitHub Actions workflows for continuous integration and deployment.
+*   `docs/`: Stores all project documentation, including the Product Requirements Document (PRD) and architectural specifications.
+*   `scripts/`: Houses utility scripts for development tasks, such as building and releasing the application.
+*   `src/`: The main source code directory for the ZoteroRAG Desk application.
+*   `tests/`: Contains all unit, integration, and end-to-end tests for the application.
+*   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
+*   `pyproject.toml`: Defines project metadata, dependencies, and build configurations (PEP 621).
+*   `README.md`: The main project README file, providing an overview and quick start guide.
 
 ```plaintext
 zotero-rag-desk/
@@ -1121,7 +1132,14 @@ zotero-rag-desk/
 
 ### Coding Standards
 
-All code contributions must adhere to the guidelines specified in the `CONTRIBUTING.md` file located in the root of the repository. This document details our standards for code formatting (`black`), linting (`ruff`), type hinting, and docstrings. Before submitting any code, please ensure it complies with these standards.
+All code contributions must adhere to the guidelines specified in the `CONTRIBUTING.md` file located in the root of the repository. This document details our standards for code quality and consistency. Specifically:
+
+*   **Code Formatting:** We use `black` for uncompromising code formatting to ensure a consistent style across the entire codebase.
+*   **Linting:** `ruff` is employed for fast and efficient linting, catching common errors and enforcing best practices.
+*   **Type Hinting:** All new Python code must include comprehensive type hints to improve readability, maintainability, and enable static analysis.
+*   **Docstrings:** Functions, classes, and modules should be documented using Google-style docstrings to explain their purpose, arguments, and return values.
+
+Before submitting any code, please ensure it complies with these standards. Automated checks are in place via CI/CD to enforce these guidelines.
 
 ### Local Development Setup
 

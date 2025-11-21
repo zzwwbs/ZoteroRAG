@@ -6,18 +6,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (
-    QMessageBox,
-    QMainWindow,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QMessageBox, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from ..config.settings_manager import SettingsManager
 from ..core.services.embedding_client import EmbeddingClient
 from ..core.services.indexing_service import IndexingService
 from ..core.services.metadata_db_manager import MetadataDBManager
+from ..core.services.search_service import SearchService, SearchServiceError, SearchResult
 from ..core.services.vector_db_manager import VectorDBManager
 from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
@@ -26,6 +21,7 @@ from ..core.services.zotero_manager import (
 from .indexing_scope_view import IndexingScopeView
 from .library_view import LibraryView
 from .onboarding_view import OnboardingView
+from .search_view import SearchView
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +31,9 @@ class MainWindow(QMainWindow):
         self,
         settings_manager: SettingsManager | None = None,
         zotero_manager: ZoteroManager | None = None,
+        search_service: SearchService | None = None,
+        thread_pool: QThreadPool | None = None,
+        auto_start: bool = True,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Zotero RAG")
@@ -42,10 +41,15 @@ class MainWindow(QMainWindow):
 
         self._settings_manager = settings_manager or SettingsManager()
         self._zotero_manager = zotero_manager or ZoteroManager()
-        self._thread_pool = QThreadPool.globalInstance()
+        self._thread_pool = thread_pool or QThreadPool.globalInstance()
         self._metadata_manager = MetadataDBManager()
         self._vector_manager = VectorDBManager(dimension=1536)
         self._embedding_client = EmbeddingClient(self._settings_manager)
+        self._search_service = search_service or SearchService(
+            self._embedding_client,
+            self._vector_manager,
+            self._metadata_manager,
+        )
         self._indexing_service = IndexingService(
             self._zotero_manager,
             metadata_manager=self._metadata_manager,
@@ -59,12 +63,16 @@ class MainWindow(QMainWindow):
         self._onboarding_view = OnboardingView(self._zotero_manager)
         self._onboarding_view.path_confirmed.connect(self._handle_path_selected)
 
+        self._search_view = SearchView()
+        self._search_view.search_triggered.connect(self._on_search)
+
         self._library_view = LibraryView()
         self._indexing_scope_view = IndexingScopeView()
         self._indexing_scope_view.scope_selected.connect(self._start_indexing_task)
 
         self._main_container = QWidget()
         main_layout = QVBoxLayout(self._main_container)
+        main_layout.addWidget(self._search_view)
         main_layout.addWidget(self._library_view)
         main_layout.addWidget(self._indexing_scope_view)
 
@@ -72,7 +80,8 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._main_container)
 
         self._setup_menu_bar()
-        self._determine_initial_view()
+        if auto_start:
+            self._determine_initial_view()
 
     def _determine_initial_view(self) -> None:
         saved_path = self._settings_manager.get_zotero_path()
@@ -139,6 +148,28 @@ class MainWindow(QMainWindow):
     def _handle_indexing_progress(self, payload: dict) -> None:
         self._indexing_scope_view.update_progress(payload)
 
+    def _on_search(self, query: str) -> None:
+        worker = _SearchRunnable(self._search_service, query)
+        worker.signals.result.connect(self._handle_search_result)
+        worker.signals.error.connect(self._handle_search_error)
+        worker.signals.finished.connect(self._handle_search_finished)
+        self._search_view.clear_messages()
+        self._search_view.set_busy(True)
+        self._search_view.set_status("Searching...")
+        self._thread_pool.start(worker)
+
+    def _handle_search_result(self, result: SearchResult) -> None:
+        self._search_view.set_status(
+            f"Embedding received ({len(result.query_embedding)} dimensions)."
+        )
+
+    def _handle_search_error(self, message: str) -> None:
+        self._search_view.set_error(message)
+        self._search_view.set_status("Search failed.")
+
+    def _handle_search_finished(self) -> None:
+        self._search_view.set_busy(False)
+
 
 class _IndexingWorkerSignals(QObject):
     progress = Signal(dict)
@@ -160,4 +191,31 @@ class _IndexingRunnable(QRunnable):
             self._service.start_indexing(self._scope)
         finally:
             self._service.set_progress_callback(None)
+            self.signals.finished.emit()
+
+
+class _SearchWorkerSignals(QObject):
+    result = Signal(SearchResult)
+    error = Signal(str)
+    finished = Signal()
+
+
+class _SearchRunnable(QRunnable):
+    """Background task runner for search requests."""
+
+    def __init__(self, service: SearchService, query: str) -> None:
+        super().__init__()
+        self._service = service
+        self._query = query
+        self.signals = _SearchWorkerSignals()
+
+    def run(self) -> None:
+        try:
+            result = self._service.search(self._query)
+            self.signals.result.emit(result)
+        except SearchServiceError as error:
+            self.signals.error.emit(str(error))
+        except Exception as error:  # pragma: no cover - safeguard
+            self.signals.error.emit(str(error))
+        finally:
             self.signals.finished.emit()
