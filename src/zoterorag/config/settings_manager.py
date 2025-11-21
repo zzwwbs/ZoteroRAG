@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ class AppSettings:
     """Configuration values stored for the application."""
 
     zotero_data_path: str | None = None
+    api_key: str | None = None
 
 
 class SettingsManager:
@@ -38,11 +40,17 @@ class SettingsManager:
         except ValueError:
             return AppSettings()
 
-        return AppSettings(zotero_data_path=raw.get("zotero_data_path"))
+        return AppSettings(
+            zotero_data_path=raw.get("zotero_data_path"),
+            api_key=raw.get("api_key"),
+        )
 
     def save_settings(self, settings: AppSettings) -> None:
         """Persist the provided settings to disk."""
-        payload: dict[str, Any] = {"zotero_data_path": settings.zotero_data_path}
+        payload: dict[str, Any] = {
+            "zotero_data_path": settings.zotero_data_path,
+            "api_key": settings.api_key,
+        }
         self._settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         self._settings = settings
 
@@ -59,7 +67,30 @@ class SettingsManager:
         normalized: str | None = (
             str(Path(path).expanduser()) if path else None
         )
-        self.save_settings(AppSettings(zotero_data_path=normalized))
+        self.save_settings(
+            AppSettings(
+                zotero_data_path=normalized,
+                api_key=self._settings.api_key,
+            )
+        )
+
+    def get_api_key(self) -> str | None:
+        """Return the stored API key or fallback to environment configuration."""
+
+        if self._settings.api_key:
+            return self._settings.api_key
+
+        return os.getenv("OPENAI_API_KEY")
+
+    def set_api_key(self, api_key: str | None) -> None:
+        """Persist the provided API key."""
+
+        self.save_settings(
+            AppSettings(
+                zotero_data_path=self._settings.zotero_data_path,
+                api_key=api_key,
+            )
+        )
 
     def refresh(self) -> AppSettings:
         """Reload settings from disk, discarding cached values."""
