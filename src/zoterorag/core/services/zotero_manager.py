@@ -194,6 +194,9 @@ class ZoteroManager:
             raise ZoteroDatabaseError(
                 f"Failed to open Zotero database: {error}"
             ) from error
+        except Exception as error:
+            logger.exception("Unexpected error while fetching attachments")
+            raise ZoteroDatabaseError(str(error)) from error
 
         resolved_paths: list[Path] = []
         for row in rows:
