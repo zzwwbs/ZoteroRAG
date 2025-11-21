@@ -27,5 +27,5 @@ class Chunk:
     document_id: int
     content: str
     page_number: int
-    vector_id: int
+    vector_id: int = -1
     id: int | None = None
