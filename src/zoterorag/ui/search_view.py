@@ -17,6 +17,7 @@ class SearchView(QWidget):
     """Simple search input with keyboard and button activation."""
 
     search_triggered = Signal(str)
+    copy_to_chatgpt_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -31,6 +32,10 @@ class SearchView(QWidget):
         self._start_button.setAccessibleName("Start search")
         self._start_button.clicked.connect(self._emit_search)
 
+        self._copy_button = QPushButton("Copy to ChatGPT")
+        self._copy_button.setAccessibleName("Copy to ChatGPT")
+        self._copy_button.clicked.connect(self.copy_to_chatgpt_requested.emit)
+
         self._status_label = QLabel()
         self._status_label.setAccessibleName("Search status")
 
@@ -41,6 +46,7 @@ class SearchView(QWidget):
         row = QHBoxLayout()
         row.addWidget(self._input, stretch=1)
         row.addWidget(self._start_button)
+        row.addWidget(self._copy_button)
 
         layout = QVBoxLayout(self)
         layout.addLayout(row)
@@ -62,6 +68,7 @@ class SearchView(QWidget):
         self._is_busy = busy
         self._input.setDisabled(busy)
         self._start_button.setDisabled(busy)
+        self._copy_button.setDisabled(busy)
         if busy:
             self._status_label.setText("Searching...")
         elif self._status_label.text() == "Searching...":

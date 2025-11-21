@@ -13,6 +13,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QMessageBox,
     QMainWindow,
+    QApplication,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -92,6 +93,7 @@ class MainWindow(QMainWindow):
 
         self._search_view = SearchView()
         self._search_view.search_triggered.connect(self._on_search)
+        self._search_view.copy_to_chatgpt_requested.connect(self._handle_copy_to_chatgpt)
 
         self._library_view = LibraryView()
         self._indexing_scope_view = IndexingScopeView()
@@ -261,6 +263,19 @@ class MainWindow(QMainWindow):
         self._analysis_loading.setText("Analyzing with AI...")
         self._analysis_label.setText("")
         self._thread_pool.start(worker)
+
+    def _handle_copy_to_chatgpt(self) -> None:
+        if not self._state.search_matches:
+            QMessageBox.information(self, "Copy to ChatGPT", "No search results to export.")
+            return
+        prompt = format_chatgpt_prompt(
+            self._state.current_query,
+            self._state.search_matches,
+            limit=self._chunk_count.value(),
+            selected_document_id=self._state.selected_paper.id if self._state.selected_paper else None,
+        )
+        QApplication.clipboard().setText(prompt)
+        QMessageBox.information(self, "Copy to ChatGPT", "Prompt copied to clipboard.")
 
     def _handle_analysis_result(self, text: str) -> None:
         self._analysis_label.setText(text)
@@ -470,3 +485,41 @@ class _AIAnalyzeRunnable(QRunnable):
             self.signals.error.emit(str(error))
         finally:
             self.signals.finished.emit()
+
+
+def format_chatgpt_prompt(
+    query: str,
+    matches: list[SearchMatch],
+    *,
+    limit: int,
+    selected_document_id: int | None = None,
+) -> str:
+    """Create a ChatGPT-friendly prompt from query and matches."""
+
+    limited: list[SearchMatch] = []
+    for match in matches:
+        if selected_document_id and (not match.document or match.document.id != selected_document_id):
+            continue
+        limited.append(match)
+        if len(limited) >= max(1, min(limit, 50)):
+            break
+
+    lines = [
+        "Based on the following research paper excerpts, please answer the query below.",
+        "",
+        f"Query: \"{query}\"",
+        "",
+        "Excerpts:",
+    ]
+    for idx, match in enumerate(limited, start=1):
+        doc = match.document
+        title = doc.title if doc else "Unknown title"
+        authors = ", ".join(doc.authors) if doc and doc.authors else "Unknown authors"
+        year = doc.year if doc else "n/a"
+        page = match.chunk.page_number
+        content = match.chunk.content.replace("\n", " ").strip()
+        lines.append(
+            f"{idx}. Source: {title} ({authors}, {year}) - Page {page}\n    Content: \"{content}\""
+        )
+
+    return "\n".join(lines)
