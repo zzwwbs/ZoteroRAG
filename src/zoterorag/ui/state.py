@@ -15,3 +15,4 @@ class AppState:
 
     search_matches: list[SearchMatch] = field(default_factory=list)
     selected_paper: Optional[Document] = None
+    enable_ai_analysis: bool = False

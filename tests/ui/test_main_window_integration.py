@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 from zoterorag.core.data.models import Chunk, Document
 from zoterorag.core.services.search_service import SearchMatch, SearchResult, SearchServiceError
 from zoterorag.ui.main_window import MainWindow
+from zoterorag.config.settings_manager import AppSettings
 from datetime import datetime
 
 
@@ -21,6 +22,10 @@ class FakeSettings:
 
     def set_zotero_path(self, path):  # pragma: no cover - test helper
         self._path = path
+
+    def load_settings(self) -> AppSettings:
+        """Return default settings for testing."""
+        return AppSettings()
 
 
 class FakeSearchService:

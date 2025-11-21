@@ -1,0 +1,54 @@
+schema: 1
+story: '4.1'
+story_title: 'Implement BYOK LLM API Configuration'
+gate: PASS
+status_reason: 'All acceptance criteria met with secure keyring implementation. Two production bugs discovered and fixed during review.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-11-21T00:00:00Z'
+
+top_issues:
+  - id: 'BUG-001'
+    severity: high
+    finding: 'Methods _open_settings_dialog, _validate_api_key, _load_state_from_settings incorrectly placed inside _OpenPdfRunnable class'
+    suggested_action: 'Moved methods to MainWindow class at correct indentation level - FIXED'
+  - id: 'BUG-002'
+    severity: medium
+    finding: 'FakeSettings test mock missing load_settings() method'
+    suggested_action: 'Added load_settings() returning default AppSettings - FIXED'
+
+waiver:
+  active: false
+
+quality_score: 100
+
+evidence:
+  tests_reviewed: 42
+  tests_added: 2
+  bugs_fixed: 2
+  trace:
+    ac_covered: [1, 2, 3, 4]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'API keys stored in OS keyring (macOS Keychain), password-masked input, HTTPS enforced, no plaintext logging'
+  usability:
+    status: PASS
+    notes: 'Clear settings dialog with test connection, password field, and toggle switch'
+  reliability:
+    status: PASS
+    notes: 'Graceful fallback to file storage when keyring unavailable, comprehensive error handling'
+  maintainability:
+    status: PASS
+    notes: 'Clean separation of concerns, type hints, dependency injection, well-tested'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Consider adding API key validation on save (not just test)'
+      refs: ['src/zoterorag/ui/settings_dialog.py']
+    - action: 'Add support for custom OpenAI-compatible endpoints'
+      refs: ['src/zoterorag/config/settings_manager.py']
+    - action: 'Consider adding API usage tracking/monitoring'
+      refs: ['src/zoterorag/core/services/embedding_client.py']

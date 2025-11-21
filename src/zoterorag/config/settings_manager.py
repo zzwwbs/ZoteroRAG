@@ -8,23 +8,34 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    import keyring  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    keyring = None  # type: ignore
+
 
 @dataclass(frozen=True)
 class AppSettings:
     """Configuration values stored for the application."""
 
     zotero_data_path: str | None = None
-    api_key: str | None = None
+    api_key: str | None = None  # legacy support only; secure store preferred
+    enable_ai_analysis: bool = False
 
 
 class SettingsManager:
     """Helper for reading and writing persistent application settings."""
 
-    def __init__(self, settings_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        settings_dir: Path | None = None,
+        keyring_service: str = "zoterorag",
+    ) -> None:
         self._settings_dir = (settings_dir or Path.home() / ".zotero_rag").expanduser()
         self._settings_dir.mkdir(parents=True, exist_ok=True)
         self._settings_file = self._settings_dir / "settings.json"
         self._settings = self._load_settings()
+        self._keyring_service = keyring_service
 
     def load_settings(self) -> AppSettings:
         """Load settings from disk, returning defaults when the file is absent."""
@@ -43,6 +54,7 @@ class SettingsManager:
         return AppSettings(
             zotero_data_path=raw.get("zotero_data_path"),
             api_key=raw.get("api_key"),
+            enable_ai_analysis=bool(raw.get("enable_ai_analysis", False)),
         )
 
     def save_settings(self, settings: AppSettings) -> None:
@@ -50,6 +62,7 @@ class SettingsManager:
         payload: dict[str, Any] = {
             "zotero_data_path": settings.zotero_data_path,
             "api_key": settings.api_key,
+            "enable_ai_analysis": settings.enable_ai_analysis,
         }
         self._settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         self._settings = settings
@@ -71,11 +84,20 @@ class SettingsManager:
             AppSettings(
                 zotero_data_path=normalized,
                 api_key=self._settings.api_key,
+                enable_ai_analysis=self._settings.enable_ai_analysis,
             )
         )
 
     def get_api_key(self) -> str | None:
         """Return the stored API key or fallback to environment configuration."""
+
+        if keyring:
+            try:
+                stored = keyring.get_password(self._keyring_service, "api_key")
+                if stored:
+                    return stored
+            except Exception:
+                pass
 
         if self._settings.api_key:
             return self._settings.api_key
@@ -89,6 +111,34 @@ class SettingsManager:
             AppSettings(
                 zotero_data_path=self._settings.zotero_data_path,
                 api_key=api_key,
+                enable_ai_analysis=self._settings.enable_ai_analysis,
+            )
+        )
+
+    def set_api_key_securely(self, api_key: str | None) -> None:
+        """Store the API key using the OS keyring when available."""
+
+        if keyring:
+            try:
+                if api_key:
+                    keyring.set_password(self._keyring_service, "api_key", api_key)
+                else:
+                    keyring.delete_password(self._keyring_service, "api_key")
+                return
+            except Exception:
+                # Fall back to file-based storage if keyring errors
+                pass
+
+        # Fallback: store in settings (legacy) if keyring unavailable
+        self.set_api_key(api_key)
+
+    def set_enable_ai_analysis(self, enabled: bool) -> None:
+        """Toggle AI analysis setting and persist."""
+        self.save_settings(
+            AppSettings(
+                zotero_data_path=self._settings.zotero_data_path,
+                api_key=self._settings.api_key,
+                enable_ai_analysis=enabled,
             )
         )
 

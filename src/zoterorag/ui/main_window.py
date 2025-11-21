@@ -10,7 +10,13 @@ import logging
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMessageBox, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QMessageBox,
+    QMainWindow,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..config.settings_manager import SettingsManager
 from ..core.services.embedding_client import EmbeddingClient
@@ -33,6 +39,7 @@ from .library_view import LibraryView
 from .onboarding_view import OnboardingView
 from .paper_list_view import PaperListView
 from .search_view import SearchView
+from .settings_dialog import SettingsDialog
 from .state import AppState
 
 logger = logging.getLogger(__name__)
@@ -105,6 +112,7 @@ class MainWindow(QMainWindow):
         self._setup_menu_bar()
         if auto_start:
             self._determine_initial_view()
+        self._load_state_from_settings()
 
     def _determine_initial_view(self) -> None:
         saved_path = self._settings_manager.get_zotero_path()
@@ -151,6 +159,10 @@ class MainWindow(QMainWindow):
         about_action = QAction("About Zotero RAG", self)
         about_action.triggered.connect(self._show_about_dialog)
         file_menu.addAction(about_action)
+
+        settings_action = QAction("Settings", self)
+        settings_action.triggered.connect(self._open_settings_dialog)
+        file_menu.addAction(settings_action)
 
     def _show_about_dialog(self) -> None:
         """Present an informational dialog describing the application."""
@@ -238,6 +250,36 @@ class MainWindow(QMainWindow):
         # Launch in background to avoid blocking UI.
         runnable = _OpenPdfRunnable(path)
         self._thread_pool.start(runnable)
+
+    def _open_settings_dialog(self) -> None:
+        """Open the settings dialog for API key configuration."""
+        dialog = SettingsDialog(
+            self._settings_manager,
+            validator=self._validate_api_key,
+            thread_pool=self._thread_pool,
+            parent=self,
+        )
+        if dialog.exec():
+            self._load_state_from_settings()
+
+    def _validate_api_key(self, api_key: str) -> None:
+        """Lightweight embedding request to validate API key."""
+
+        class _TransientSettings:
+            def __init__(self, key: str) -> None:
+                self._key = key
+
+            def get_api_key(self) -> str | None:  # pragma: no cover - trivial
+                return self._key
+
+        client = EmbeddingClient(_TransientSettings(api_key))
+        # Small payload to verify credentials.
+        client.get_embedding("ping")
+
+    def _load_state_from_settings(self) -> None:
+        """Load enable_ai_analysis flag from persisted settings."""
+        settings = self._settings_manager.load_settings()
+        self._state.enable_ai_analysis = settings.enable_ai_analysis
 
 
 class _IndexingWorkerSignals(QObject):
