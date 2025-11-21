@@ -1,0 +1,64 @@
+schema: 1
+story: '3.4'
+story_title: 'Implement Interactive Results Filtering'
+gate: PASS
+status_reason: 'All ACs met. Interactive filtering, clear filter, and PDF opening implemented correctly. Critical Qt role bug fixed during review.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-01-15T11:00:00Z'
+
+top_issues: []
+
+waiver:
+  active: false
+
+quality_score: 100
+
+evidence:
+  tests_reviewed: 40
+  tests_passing: 40
+  new_tests: 5
+  bugs_fixed: 1
+  trace:
+    ac_covered: [1, 2, 3]
+    ac_gaps: []
+
+nfr_validation:
+  usability:
+    status: PASS
+    notes: 'Interactive filtering with clear filter button. Intuitive paper/chunk selection. User feedback for missing PDFs.'
+  reliability:
+    status: PASS
+    notes: 'Defensive checks for None, file existence. Graceful error handling with QMessageBox warnings.'
+  maintainability:
+    status: PASS
+    notes: 'Clean MVC pattern with AppState. Signal/slot communication. Type hints throughout. Fixed common Qt pitfall (role 0 usage).'
+  performance:
+    status: PASS
+    notes: 'Non-blocking PDF opening via QThreadPool. Efficient O(n) filtering with set-based deduplication.'
+
+test_coverage:
+  unit_tests:
+    - 'test_emits_paper_selected_on_click'
+    - 'test_clear_filter_signal'
+    - 'test_open_pdf_signal'
+    - 'test_filters_by_selected_document'
+    - 'test_emits_open_pdf'
+  integration_validated: true
+  manual_validation: true
+
+bugs_fixed:
+  - id: 'QT-ROLE-001'
+    severity: high
+    description: 'Incorrect use of role 0 (Qt.DisplayRole) for setData() was clearing item text'
+    fix: 'Changed to Qt.UserRole for custom data storage, preserving DisplayRole for text'
+    impact: 'All list items now display text correctly'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Consider adding keyboard navigation (arrow keys) for paper selection'
+      refs: ['src/zoterorag/ui/paper_list_view.py']
+    - action: 'Add context menu (right-click) for Open PDF as alternative to button'
+      refs: ['src/zoterorag/ui/paper_list_view.py', 'src/zoterorag/ui/chunk_list_view.py']
+    - action: 'Consider showing match count per paper in PaperListView'
+      refs: ['src/zoterorag/ui/paper_list_view.py']

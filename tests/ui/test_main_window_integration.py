@@ -9,8 +9,10 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import QApplication, QMainWindow
 
-from zoterorag.core.services.search_service import SearchResult, SearchServiceError
+from zoterorag.core.data.models import Chunk, Document
+from zoterorag.core.services.search_service import SearchMatch, SearchResult, SearchServiceError
 from zoterorag.ui.main_window import MainWindow
+from datetime import datetime
 
 
 class FakeSettings:
@@ -33,7 +35,27 @@ class FakeSearchService:
         return SearchResult(
             query=query,
             query_embedding=[0.1, 0.2, 0.3],
-            matches=[],
+            matches=[
+                SearchMatch(
+                    chunk=Chunk(
+                        id=1,
+                        document_id=1,
+                        content="chunk content",
+                        page_number=1,
+                        vector_id=5,
+                    ),
+                    document=Document(
+                        id=1,
+                        zotero_item_key="abc",
+                        title="Doc Title",
+                        authors=["Author"],
+                        year=2024,
+                        pdf_file_path="/tmp/doc.pdf",
+                        indexed_at=datetime.utcnow(),
+                    ),
+                    distance=0.01,
+                )
+            ],
         )
 
 

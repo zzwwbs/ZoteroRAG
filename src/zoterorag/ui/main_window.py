@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import subprocess
+import sys
+import logging
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QAction
@@ -23,10 +27,15 @@ from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
     ZoteroManager,
 )
+from .chunk_list_view import ChunkListView
 from .indexing_scope_view import IndexingScopeView
 from .library_view import LibraryView
 from .onboarding_view import OnboardingView
+from .paper_list_view import PaperListView
 from .search_view import SearchView
+from .state import AppState
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -61,6 +70,7 @@ class MainWindow(QMainWindow):
             vector_manager=self._vector_manager,
             embedding_client=self._embedding_client,
         )
+        self._state = AppState()
 
         self._stack = QStackedWidget()
         self.setCentralWidget(self._stack)
@@ -74,12 +84,20 @@ class MainWindow(QMainWindow):
         self._library_view = LibraryView()
         self._indexing_scope_view = IndexingScopeView()
         self._indexing_scope_view.scope_selected.connect(self._start_indexing_task)
+        self._paper_list_view = PaperListView()
+        self._paper_list_view.paper_selected.connect(self._on_paper_selected)
+        self._paper_list_view.clear_filter_requested.connect(self._clear_selection)
+        self._paper_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
+        self._chunk_list_view = ChunkListView()
+        self._chunk_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
 
         self._main_container = QWidget()
         main_layout = QVBoxLayout(self._main_container)
         main_layout.addWidget(self._search_view)
         main_layout.addWidget(self._library_view)
         main_layout.addWidget(self._indexing_scope_view)
+        main_layout.addWidget(self._paper_list_view)
+        main_layout.addWidget(self._chunk_list_view)
 
         self._stack.addWidget(self._onboarding_view)
         self._stack.addWidget(self._main_container)
@@ -164,7 +182,10 @@ class MainWindow(QMainWindow):
         self._thread_pool.start(worker)
 
     def _handle_search_result(self, result: SearchResult) -> None:
-        match_count = len(result.matches or [])
+        self._state.search_matches = result.matches or []
+        self._state.selected_paper = None
+        self._refresh_results_views()
+        match_count = len(self._state.search_matches)
         self._search_view.set_status(
             f"Found {match_count} results (embedding {len(result.query_embedding)} dims)."
         )
@@ -175,6 +196,48 @@ class MainWindow(QMainWindow):
 
     def _handle_search_finished(self) -> None:
         self._search_view.set_busy(False)
+
+    def _refresh_results_views(self) -> None:
+        """Update paper and chunk lists from current state."""
+        documents: list = []
+        seen: set[int] = set()
+        for match in self._state.search_matches:
+            doc = match.document
+            if doc and doc.id is not None and doc.id not in seen:
+                seen.add(doc.id)
+                documents.append(doc)
+
+        self._paper_list_view.set_papers(documents)
+        self._chunk_list_view.update_chunks(
+            self._state.search_matches,
+            selected_document_id=self._state.selected_paper.id if self._state.selected_paper else None,
+        )
+
+    def _on_paper_selected(self, document) -> None:
+        if document is None:
+            return
+        self._state.selected_paper = document
+        self._chunk_list_view.update_chunks(
+            self._state.search_matches, selected_document_id=document.id
+        )
+
+    def _clear_selection(self) -> None:
+        self._state.selected_paper = None
+        self._chunk_list_view.update_chunks(self._state.search_matches, None)
+
+    def _open_pdf_for_document(self, document) -> None:
+        if not document or not document.pdf_file_path:
+            QMessageBox.warning(self, "Missing PDF", "This item does not have a PDF path.")
+            return
+
+        path = Path(document.pdf_file_path).expanduser()
+        if not path.exists():
+            QMessageBox.warning(self, "File not found", f"PDF not found: {path}")
+            return
+
+        # Launch in background to avoid blocking UI.
+        runnable = _OpenPdfRunnable(path)
+        self._thread_pool.start(runnable)
 
 
 class _IndexingWorkerSignals(QObject):
@@ -225,3 +288,22 @@ class _SearchRunnable(QRunnable):
             self.signals.error.emit(str(error))
         finally:
             self.signals.finished.emit()
+
+
+class _OpenPdfRunnable(QRunnable):
+    """Open a PDF using the system default viewer without blocking the UI."""
+
+    def __init__(self, pdf_path: Path) -> None:
+        super().__init__()
+        self._pdf_path = pdf_path
+
+    def run(self) -> None:
+        try:
+            if sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", str(self._pdf_path)])
+            elif os.name == "nt":
+                os.startfile(self._pdf_path)  # type: ignore[attr-defined]
+            else:
+                subprocess.Popen(["xdg-open", str(self._pdf_path)])
+        except Exception:
+            logger.exception("Failed to open PDF: %s", self._pdf_path)
