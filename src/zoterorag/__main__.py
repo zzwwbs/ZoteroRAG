@@ -8,8 +8,8 @@ import traceback
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from .core.utils.logging_config import configure_logging
-from .main import main
+from zoterorag.core.utils.logging_config import configure_logging
+from zoterorag.main import main
 
 
 def _global_exception_hook(exc_type, exc_value, exc_traceback):

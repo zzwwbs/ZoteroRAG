@@ -47,7 +47,6 @@ def build_target(target: str) -> None:
         str(work_target),
         "--specpath",
         str(work_target),
-        "--onefile",
         "--noconfirm",
         "--clean",
     ]
