@@ -10,6 +10,8 @@ from pathlib import Path
 from platform import system
 from typing import Iterable, List
 
+from ..data.models import Collection
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,3 +223,31 @@ class ZoteroManager:
 
         storage_dir = (self._zotero_path / "storage").expanduser()
         return storage_dir if storage_dir.is_dir() else None
+    def get_collections(self) -> list[Collection]:
+        """Return all Zotero collections available in the database."""
+
+        db_file = self._get_database_file()
+        if not db_file:
+            raise ZoteroDatabaseError("Zotero database not configured or missing.")
+
+        try:
+            with self._connect_to_database(db_file) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    "SELECT collectionID, collectionName, key, parentCollectionID "
+                    "FROM collections"
+                ).fetchall()
+                return [
+                    Collection(
+                        id=row["collectionID"],
+                        name=row["collectionName"],
+                        zotero_collection_key=row["key"],
+                        parent_id=row["parentCollectionID"],
+                    )
+                    for row in rows
+                ]
+        except sqlite3.OperationalError as error:
+            logger.exception("Unable to read collections from Zotero database")
+            raise ZoteroDatabaseError(
+                f"Failed to read collections: {error}"
+            ) from error

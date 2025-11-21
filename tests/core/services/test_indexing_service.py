@@ -25,3 +25,10 @@ def test_extract_text_for_items_aggregates_text(tmp_path):
     result = service.extract_text_for_items([1, 2])
     assert result[1] == "text:a.pdf"
     assert 2 not in result
+
+
+def test_start_indexing_accepts_scope(tmp_path, caplog):
+    service = IndexingService(DummyZoteroManager({}), pdf_extractor=lambda _: "")
+    with caplog.at_level("INFO"):
+        service.start_indexing({"type": "collection", "id": 5})
+    assert "scope" in caplog.text

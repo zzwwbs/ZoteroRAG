@@ -137,3 +137,29 @@ def test_get_pdf_attachments_resolves_storage_paths(tmp_path: Path) -> None:
     manager = ZoteroManager(zotero_path=db_dir)
     attachments = manager.get_pdf_attachments(1)
     assert attachments == [pdf_path]
+
+
+def test_get_collections_returns_all_rows(tmp_path: Path) -> None:
+    db_dir = tmp_path / "zotero"
+    db_dir.mkdir()
+    db_file = db_dir / "zotero.sqlite"
+
+    connection = sqlite3.connect(db_file)
+    cursor = connection.cursor()
+    cursor.execute(
+        "CREATE TABLE collections (collectionID INTEGER PRIMARY KEY, collectionName TEXT, key TEXT, parentCollectionID INTEGER)"
+    )
+    cursor.execute(
+        "INSERT INTO collections(collectionID, collectionName, key, parentCollectionID) VALUES (1, 'Root', 'AAA', NULL)"
+    )
+    cursor.execute(
+        "INSERT INTO collections(collectionID, collectionName, key, parentCollectionID) VALUES (2, 'Child', 'BBB', 1)"
+    )
+    connection.commit()
+    connection.close()
+
+    manager = ZoteroManager(zotero_path=db_dir)
+    collections = manager.get_collections()
+    assert len(collections) == 2
+    assert collections[0].name == "Root"
+    assert collections[1].parent_id == 1

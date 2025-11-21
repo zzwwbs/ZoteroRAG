@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable
 
 from ..utils.pdf_extractor import extract_text_from_pdf
 from .zotero_manager import ZoteroManager
@@ -40,3 +40,15 @@ class IndexingService:
                 results[item_id] = "\n\n".join(aggregated)
 
         return results
+
+    def start_indexing(self, scope: Dict[str, Any]) -> None:
+        """Kick off the indexing pipeline for the selected scope."""
+
+        logger.info("Starting indexing with scope: %s", scope)
+        scope_type = scope.get("type")
+        if scope_type == "collection":
+            logger.debug("Fetching items for collection %s", scope.get("id"))
+        elif scope_type == "all":
+            logger.debug("Indexing entire library")
+        else:
+            logger.debug("Indexing custom selection")

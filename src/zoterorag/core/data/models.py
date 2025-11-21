@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -28,4 +28,14 @@ class Chunk:
     content: str
     page_number: int
     vector_id: int = -1
+    id: int | None = None
+
+
+@dataclass
+class Collection:
+    """Represents a Zotero collection."""
+
+    zotero_collection_key: str
+    name: str
+    parent_id: Optional[int] = None
     id: int | None = None
