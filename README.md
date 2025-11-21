@@ -29,6 +29,8 @@ python -m scripts.build --target linux
 
 Each invocation drives `PyInstaller` with supplemental work/dist directories under `build/<target>` and `dist/<target>`. You can run multiple targets at once by listing them after `--target`.
 
+If you run `python -m scripts.build` without `--target`, it builds for the current OS only. Assets under `src/zoterorag/ui/assets` are bundled automatically when present. On macOS the script also creates a placeholder `.dmg` alongside the `.app` bundle; integrate codesign/notarization there as needed.
+
 ## Directory Highlights
 - `src/zoterorag/`: Application package with `main` launcher and UI scaffolding.
 - `main.py`: Application entry point compatible with both direct execution and packaging workflows.
