@@ -48,3 +48,10 @@ def test_insert_document_and_chunk_round_trip(tmp_path: Path) -> None:
     fetched_chunk = manager.chunk_repository.get_by_id(saved_chunk.id)
     assert fetched_chunk is not None
     assert fetched_chunk.content == "Chunk text"
+
+    fetched_by_key = manager.get_document_by_key("ABC123")
+    assert fetched_by_key is not None
+    assert fetched_by_key.id == saved_doc.id
+
+    next_vector_id = manager.get_next_vector_id()
+    assert next_vector_id >= 43  # 42 in use above

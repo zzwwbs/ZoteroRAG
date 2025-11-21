@@ -32,11 +32,12 @@ class IndexingScopeView(QWidget):
         self._collection_combo = QComboBox()
         self._start_button = QPushButton("Start Indexing")
         self._status_label = QLabel("")
+        self._busy = False
 
         self._entire_radio.setChecked(True)
         self._collection_combo.setEnabled(False)
 
-        self._collection_radio.toggled.connect(self._collection_combo.setEnabled)
+        self._collection_radio.toggled.connect(self._handle_collection_toggle)
         self._start_button.clicked.connect(self._emit_scope)
 
         layout = QVBoxLayout(self)
@@ -65,12 +66,33 @@ class IndexingScopeView(QWidget):
             label = collection.name
             self._collection_combo.addItem(label, userData=collection)
 
-        has_collections = bool(self._collections)
-        self._collection_radio.setEnabled(has_collections)
-        self._collection_combo.setEnabled(has_collections and self._collection_radio.isChecked())
+        self._update_collection_controls()
         self._status_label.setText(
-            "Collections loaded." if has_collections else "No collections available."
+            "Collections loaded." if self._collections else "No collections available."
         )
+
+    def set_busy(self, busy: bool) -> None:
+        """Enable/disable user interaction while indexing runs."""
+
+        self._busy = busy
+        self._start_button.setEnabled(not busy)
+        self._entire_radio.setEnabled(not busy)
+        self._update_collection_controls()
+
+    def update_progress(self, payload: dict) -> None:
+        status = payload.get("status")
+        processed = payload.get("processed_count")
+        total = payload.get("total_count")
+        current = payload.get("current_item_name") or ""
+        if status == "complete":
+            message = "Indexing complete."
+        elif status == "error":
+            message = f"Error: {payload.get('error_message')}"
+        elif status == "skipped":
+            message = f"Skipped {current} ({processed}/{total})."
+        else:
+            message = f"Indexing {current} ({processed}/{total})..."
+        self._status_label.setText(message)
 
     def _emit_scope(self) -> None:
         if self._entire_radio.isChecked():
@@ -92,3 +114,14 @@ class IndexingScopeView(QWidget):
 
         self.scope_selected.emit(scope)
         self._status_label.setText("Indexing requested…")
+
+    def _handle_collection_toggle(self, checked: bool) -> None:
+        has_collections = bool(self._collections)
+        self._collection_combo.setEnabled(checked and has_collections and not self._busy)
+
+    def _update_collection_controls(self) -> None:
+        has_collections = bool(self._collections)
+        self._collection_radio.setEnabled(has_collections and not self._busy)
+        self._collection_combo.setEnabled(
+            self._collection_radio.isChecked() and has_collections and not self._busy
+        )

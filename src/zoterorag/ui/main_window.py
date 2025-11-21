@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QRunnable, QThreadPool
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QMessageBox,
@@ -15,7 +15,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..config.settings_manager import SettingsManager
+from ..core.services.embedding_client import EmbeddingClient
 from ..core.services.indexing_service import IndexingService
+from ..core.services.metadata_db_manager import MetadataDBManager
+from ..core.services.vector_db_manager import VectorDBManager
 from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
     ZoteroManager,
@@ -40,7 +43,15 @@ class MainWindow(QMainWindow):
         self._settings_manager = settings_manager or SettingsManager()
         self._zotero_manager = zotero_manager or ZoteroManager()
         self._thread_pool = QThreadPool.globalInstance()
-        self._indexing_service = IndexingService(self._zotero_manager)
+        self._metadata_manager = MetadataDBManager()
+        self._vector_manager = VectorDBManager(dimension=1536)
+        self._embedding_client = EmbeddingClient(self._settings_manager)
+        self._indexing_service = IndexingService(
+            self._zotero_manager,
+            metadata_manager=self._metadata_manager,
+            vector_manager=self._vector_manager,
+            embedding_client=self._embedding_client,
+        )
 
         self._stack = QStackedWidget()
         self.setCentralWidget(self._stack)
@@ -119,8 +130,19 @@ class MainWindow(QMainWindow):
         )
 
     def _start_indexing_task(self, scope: dict) -> None:
-        task = _IndexingRunnable(self._indexing_service, scope)
-        self._thread_pool.start(task)
+        worker = _IndexingRunnable(self._indexing_service, scope)
+        worker.signals.progress.connect(self._handle_indexing_progress)
+        worker.signals.finished.connect(lambda: self._indexing_scope_view.set_busy(False))
+        self._indexing_scope_view.set_busy(True)
+        self._thread_pool.start(worker)
+
+    def _handle_indexing_progress(self, payload: dict) -> None:
+        self._indexing_scope_view.update_progress(payload)
+
+
+class _IndexingWorkerSignals(QObject):
+    progress = Signal(dict)
+    finished = Signal()
 
 
 class _IndexingRunnable(QRunnable):
@@ -130,6 +152,12 @@ class _IndexingRunnable(QRunnable):
         super().__init__()
         self._service = service
         self._scope = scope
+        self.signals = _IndexingWorkerSignals()
 
     def run(self) -> None:
-        self._service.start_indexing(self._scope)
+        try:
+            self._service.set_progress_callback(self.signals.progress.emit)
+            self._service.start_indexing(self._scope)
+        finally:
+            self._service.set_progress_callback(None)
+            self.signals.finished.emit()

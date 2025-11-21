@@ -43,6 +43,13 @@ class DocumentRepository:
         ).fetchone()
         return self._row_to_document(row) if row else None
 
+    def get_by_zotero_key(self, zotero_key: str) -> Document | None:
+        row = self._connection.execute(
+            "SELECT * FROM documents WHERE zotero_item_key = ?",
+            (zotero_key,),
+        ).fetchone()
+        return self._row_to_document(row) if row else None
+
     def _row_to_document(self, row: sqlite3.Row) -> Document:
         authors = json.loads(row["authors"]) if row["authors"] else []
         indexed_at = datetime.fromisoformat(row["indexed_at"])

@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Iterable
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List
 
+from ..data.models import Chunk, Document
+from ..utils.chunking_utility import chunk_text
 from ..utils.pdf_extractor import extract_text_from_pdf
-from .zotero_manager import ZoteroManager
+from .embedding_client import EmbeddingClient, EmbeddingClientError
+from .metadata_db_manager import MetadataDBManager
+from .vector_db_manager import VectorDBManager
+from .zotero_manager import ZoteroManager, ZoteroItem
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +23,34 @@ class IndexingService:
     def __init__(
         self,
         zotero_manager: ZoteroManager,
+        metadata_manager: MetadataDBManager | None = None,
+        vector_manager: VectorDBManager | None = None,
+        embedding_client: EmbeddingClient | None = None,
         pdf_extractor: Callable[[str], str] = extract_text_from_pdf,
+        chunker: Callable[..., List[Chunk]] = chunk_text,
+        chunk_size: int = 600,
+        chunk_overlap: int = 100,
     ) -> None:
         self._zotero_manager = zotero_manager
+        self._metadata_manager = metadata_manager or MetadataDBManager()
+        self._vector_manager = vector_manager or VectorDBManager(dimension=1536)
+        if embedding_client is None:
+            raise ValueError("embedding_client is required")
+        self._embedding_client = embedding_client
         self._pdf_extractor = pdf_extractor
+        self._chunker = chunker
+        self._chunk_size = chunk_size
+        self._chunk_overlap = chunk_overlap
+        self._progress_callback: Callable[[Dict[str, Any]], None] | None = None
+
+        self._metadata_manager.initialize_database()
+        try:
+            self._vector_manager.load_index()
+        except RuntimeError as error:
+            logger.warning("Unable to load FAISS index: %s", error)
+
+    def set_progress_callback(self, callback: Callable[[Dict[str, Any]], None] | None) -> None:
+        self._progress_callback = callback
 
     def extract_text_for_items(self, item_ids: Iterable[int]) -> Dict[int, str]:
         """Return extracted text for each item by visiting its PDF attachments."""
@@ -44,11 +74,110 @@ class IndexingService:
     def start_indexing(self, scope: Dict[str, Any]) -> None:
         """Kick off the indexing pipeline for the selected scope."""
 
-        logger.info("Starting indexing with scope: %s", scope)
-        scope_type = scope.get("type")
-        if scope_type == "collection":
-            logger.debug("Fetching items for collection %s", scope.get("id"))
-        elif scope_type == "all":
-            logger.debug("Indexing entire library")
-        else:
-            logger.debug("Indexing custom selection")
+        items = self._zotero_manager.get_items_for_scope(scope)
+        total = len(items)
+        processed = 0
+
+        self._emit_progress(
+            {
+                "status": "processing",
+                "processed_count": processed,
+                "total_count": total,
+                "current_item_name": None,
+                "error_message": None,
+            }
+        )
+
+        for item in items:
+            processed += 1
+            payload = {
+                "status": "processing",
+                "processed_count": processed,
+                "total_count": total,
+                "current_item_name": item.title,
+                "error_message": None,
+            }
+
+            if self._is_already_indexed(item):
+                payload["status"] = "skipped"
+                self._emit_progress(payload)
+                continue
+
+            try:
+                self._process_item(item, self._embedding_client)
+                self._emit_progress(payload)
+            except EmbeddingClientError as error:
+                payload["status"] = "error"
+                payload["error_message"] = str(error)
+                self._emit_progress(payload)
+            except Exception as error:
+                logger.exception("Failed to index item %s", item.item_id)
+                payload["status"] = "error"
+                payload["error_message"] = str(error)
+                self._emit_progress(payload)
+
+        try:
+            self._vector_manager.save_index()
+        except RuntimeError as error:
+            logger.error("Failed to save vector index: %s", error)
+
+        self._emit_progress(
+            {
+                "status": "complete",
+                "processed_count": processed,
+                "total_count": total,
+                "current_item_name": None,
+                "error_message": None,
+            }
+        )
+
+    def _process_item(self, item: ZoteroItem, embedding_client: EmbeddingClient) -> None:
+        pdf_paths = self._zotero_manager.get_pdf_attachments(item.item_id)
+        if not pdf_paths:
+            return
+
+        document = Document(
+            zotero_item_key=item.item_key or str(item.item_id),
+            title=item.title,
+            authors=[name.strip() for name in item.authors.split(";") if name.strip()],
+            year=int(item.year) if item.year.isdigit() else None,
+            pdf_file_path=str(pdf_paths[0]) if pdf_paths else "",
+        )
+        saved_document = self._metadata_manager.document_repository.insert(document)
+
+        vectors: list[list[float]] = []
+        vector_ids: list[int] = []
+
+        page_number = 1
+        for pdf_path in pdf_paths:
+            text = self._pdf_extractor(str(pdf_path))
+            if not text.strip():
+                continue
+
+            chunks = self._chunker(
+                text,
+                saved_document.id or 0,
+                page_number=page_number,
+                chunk_size=self._chunk_size,
+                chunk_overlap=self._chunk_overlap,
+            )
+            page_number += 1
+
+            for chunk in chunks:
+                embedding = embedding_client.get_embedding(chunk.content)
+                vector_id = self._metadata_manager.get_next_vector_id()
+                chunk.vector_id = vector_id
+                self._metadata_manager.chunk_repository.insert(chunk)
+                vectors.append(embedding)
+                vector_ids.append(vector_id)
+
+        if vectors:
+            self._vector_manager.add_vectors(vectors, vector_ids)
+
+    def _is_already_indexed(self, item: ZoteroItem) -> bool:
+        existing = self._metadata_manager.get_document_by_key(item.item_key or str(item.item_id))
+        return existing is not None
+
+    def _emit_progress(self, payload: Dict[str, Any]) -> None:
+        if self._progress_callback:
+            self._progress_callback(payload)

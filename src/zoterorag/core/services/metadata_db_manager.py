@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 from ..data.repositories import ChunkRepository, DocumentRepository
@@ -35,47 +36,57 @@ CREATE INDEX IF NOT EXISTS idx_chunks_vector_id ON chunks (vector_id);
 
 
 class MetadataDBManager:
-    """Initializes and provides access to the metadata database."""
+    """Initializes and provides access to the metadata database with thread-safe connections."""
 
     def __init__(self, data_dir: Path | None = None, db_filename: str = "zoterorag.db") -> None:
         self._data_dir = (data_dir or Path.home() / ".zotero_rag").expanduser()
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / db_filename
-        self._connection: sqlite3.Connection | None = None
-        self._document_repo: DocumentRepository | None = None
-        self._chunk_repo: ChunkRepository | None = None
+        self._local = threading.local()  # Thread-local storage for connections and repositories
 
     @property
     def database_path(self) -> Path:
         return self._db_path
 
     def initialize_database(self) -> None:
-        connection = self._connect()
+        connection = self._get_connection()
         connection.executescript(SCHEMA_SQL)
         connection.commit()
 
-    def _connect(self) -> sqlite3.Connection:
-        if self._connection is None:
-            self._connection = sqlite3.connect(self._db_path)
-            self._connection.row_factory = sqlite3.Row
-            self._connection.execute("PRAGMA foreign_keys = ON")
-        return self._connection
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get or create a connection for the current thread."""
+        if not hasattr(self._local, "connection") or self._local.connection is None:
+            self._local.connection = sqlite3.connect(self._db_path)
+            self._local.connection.row_factory = sqlite3.Row
+            self._local.connection.execute("PRAGMA foreign_keys = ON")
+        return self._local.connection
 
     def close(self) -> None:
-        if self._connection:
-            self._connection.close()
-            self._connection = None
-            self._document_repo = None
-            self._chunk_repo = None
+        """Close the connection for the current thread."""
+        if hasattr(self._local, "connection") and self._local.connection:
+            self._local.connection.close()
+            self._local.connection = None
+            self._local.document_repo = None
+            self._local.chunk_repo = None
 
     @property
     def document_repository(self) -> DocumentRepository:
-        if self._document_repo is None:
-            self._document_repo = DocumentRepository(self._connect())
-        return self._document_repo
+        """Get or create a DocumentRepository for the current thread."""
+        if not hasattr(self._local, "document_repo") or self._local.document_repo is None:
+            self._local.document_repo = DocumentRepository(self._get_connection())
+        return self._local.document_repo
 
     @property
     def chunk_repository(self) -> ChunkRepository:
-        if self._chunk_repo is None:
-            self._chunk_repo = ChunkRepository(self._connect())
-        return self._chunk_repo
+        """Get or create a ChunkRepository for the current thread."""
+        if not hasattr(self._local, "chunk_repo") or self._local.chunk_repo is None:
+            self._local.chunk_repo = ChunkRepository(self._get_connection())
+        return self._local.chunk_repo
+
+    def get_document_by_key(self, zotero_key: str) -> Document | None:
+        return self.document_repository.get_by_zotero_key(zotero_key)
+
+    def get_next_vector_id(self) -> int:
+        row = self._get_connection().execute("SELECT IFNULL(MAX(vector_id), 0) AS max_id FROM chunks").fetchone()
+        current_max = row["max_id"] if row and row["max_id"] is not None else 0
+        return int(current_max) + 1

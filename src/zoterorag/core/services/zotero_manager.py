@@ -20,6 +20,7 @@ class ZoteroItem:
     """Lightweight representation of a Zotero library item."""
 
     item_id: int
+    item_key: str
     title: str
     authors: str
     year: str
@@ -123,6 +124,7 @@ class ZoteroManager:
         title = row["title"] or "Untitled"
         return ZoteroItem(
             item_id=row["itemID"],
+            item_key=row["itemKey"],
             title=title,
             authors=authors,
             year=year,
@@ -132,6 +134,7 @@ class ZoteroManager:
     def _item_query() -> str:
         return (
             "SELECT items.itemID, "
+            "items.key AS itemKey, "
             "COALESCE(title_values.value, '') AS title, "
             "GROUP_CONCAT("
             "CASE "
@@ -199,6 +202,34 @@ class ZoteroManager:
                 resolved_paths.append(candidate)
 
         return resolved_paths
+
+    def get_items_for_scope(self, scope: dict) -> list[ZoteroItem]:
+        scope_type = scope.get("type", "all")
+        if scope_type == "collection":
+            collection_id = scope.get("id")
+            if collection_id is None:
+                return []
+            item_ids = self._get_collection_item_ids(int(collection_id))
+            return [item for item in self.get_all_items() if item.item_id in item_ids]
+
+        if scope_type == "selection":
+            item_ids = set(scope.get("item_ids", []))
+            return [item for item in self.get_all_items() if item.item_id in item_ids]
+
+        return self.get_all_items()
+
+    def _get_collection_item_ids(self, collection_id: int) -> set[int]:
+        db_file = self._get_database_file()
+        if not db_file:
+            raise ZoteroDatabaseError("Zotero database not configured or missing.")
+
+        with self._connect_to_database(db_file) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                "SELECT itemID FROM collectionItems WHERE collectionID = ?",
+                (collection_id,),
+            ).fetchall()
+            return {row["itemID"] for row in rows}
 
     def _resolve_attachment_path(self, stored_path: str | None, attachment_key: str | None = None) -> Path | None:
         if not stored_path:

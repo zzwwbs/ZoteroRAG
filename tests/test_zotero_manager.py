@@ -47,7 +47,7 @@ def test_get_all_items_returns_expected_data(tmp_path: Path) -> None:
 
     connection = sqlite3.connect(db_file)
     cursor = connection.cursor()
-    cursor.execute("CREATE TABLE items(itemID INTEGER PRIMARY KEY, dateAdded TEXT)")
+    cursor.execute("CREATE TABLE items(itemID INTEGER PRIMARY KEY, key TEXT, dateAdded TEXT)")
     cursor.execute("CREATE TABLE creators(creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, name TEXT)")
     cursor.execute(
         "CREATE TABLE itemCreators(itemCreatorID INTEGER PRIMARY KEY, itemID INTEGER, creatorID INTEGER)"
@@ -66,7 +66,7 @@ def test_get_all_items_returns_expected_data(tmp_path: Path) -> None:
         "INSERT INTO fields(fieldID, fieldName) VALUES (?, ?)",
         [(1, "title"), (2, "date")],
     )
-    cursor.execute("INSERT INTO items(itemID, dateAdded) VALUES (1, '2024-01-01')")
+    cursor.execute("INSERT INTO items(itemID, key, dateAdded) VALUES (1, 'AAA', '2024-01-01')")
     cursor.execute("INSERT INTO itemDataValues(valueID, value) VALUES (1, 'Test Title')")
     cursor.execute("INSERT INTO itemDataValues(valueID, value) VALUES (2, '2022-01-01')")
     cursor.execute(
