@@ -30,7 +30,11 @@ class FakeSearchService:
         self.calls.append(query)
         if self.should_fail:
             raise SearchServiceError("Embedding lookup failed")
-        return SearchResult(query=query, query_embedding=[0.1, 0.2, 0.3])
+        return SearchResult(
+            query=query,
+            query_embedding=[0.1, 0.2, 0.3],
+            matches=[],
+        )
 
 
 class ImmediateThreadPool(QThreadPool):
@@ -62,7 +66,7 @@ def test_search_success_updates_status_and_calls_service(qapp):
 
     assert service.calls == ["deep learning"]
     assert window._search_view.is_busy() is False
-    assert "Embedding received" in window._search_view._status_label.text()
+    assert "Found" in window._search_view._status_label.text()
 
 
 def test_search_error_shows_error_message(qapp):

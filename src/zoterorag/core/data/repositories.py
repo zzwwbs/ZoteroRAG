@@ -50,6 +50,19 @@ class DocumentRepository:
         ).fetchone()
         return self._row_to_document(row) if row else None
 
+    def get_by_ids(self, document_ids: list[int]) -> list[Document]:
+        """Return documents for the provided IDs."""
+
+        if not document_ids:
+            return []
+
+        placeholders = ",".join("?" for _ in document_ids)
+        rows = self._connection.execute(
+            f"SELECT * FROM documents WHERE id IN ({placeholders})",
+            tuple(document_ids),
+        ).fetchall()
+        return [self._row_to_document(row) for row in rows]
+
     def _row_to_document(self, row: sqlite3.Row) -> Document:
         authors = json.loads(row["authors"]) if row["authors"] else []
         indexed_at = datetime.fromisoformat(row["indexed_at"])
@@ -97,3 +110,25 @@ class ChunkRepository:
             page_number=row["page_number"],
             vector_id=row["vector_id"],
         )
+
+    def get_chunks_by_vector_ids(self, vector_ids: list[int]) -> list[Chunk]:
+        """Return chunks matching the provided vector IDs."""
+
+        if not vector_ids:
+            return []
+
+        placeholders = ",".join("?" for _ in vector_ids)
+        rows = self._connection.execute(
+            f"SELECT * FROM chunks WHERE vector_id IN ({placeholders})",
+            tuple(vector_ids),
+        ).fetchall()
+        return [
+            Chunk(
+                id=row["id"],
+                document_id=row["document_id"],
+                content=row["content"],
+                page_number=row["page_number"],
+                vector_id=row["vector_id"],
+            )
+            for row in rows
+        ]

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Sequence
+
+if TYPE_CHECKING:
+    from ..data.models import Chunk, Document
 
 from .embedding_client import EmbeddingClient, EmbeddingClientError
 from .metadata_db_manager import MetadataDBManager
@@ -24,6 +28,16 @@ class SearchResult:
     query_embedding: list[float]
     distances: list[float] | None = None
     vector_ids: list[int] | None = None
+    matches: list["SearchMatch"] | None = None
+
+
+@dataclass
+class SearchMatch:
+    """Represents a chunk result with associated document info."""
+
+    chunk: "Chunk"
+    document: "Document | None"
+    distance: float | None = None
 
 
 class SearchService:
@@ -66,9 +80,46 @@ class SearchService:
             logger.exception("Vector search failed.")
             raise SearchServiceError("Unable to search the vector index.") from error
 
+        matches = self._build_matches(vector_ids or [], distances or [])
+
         return SearchResult(
             query=normalized,
             query_embedding=query_embedding,
             distances=distances,
             vector_ids=vector_ids,
+            matches=matches,
         )
+
+    def _build_matches(
+        self, vector_ids: Sequence[int], distances: Sequence[float]
+    ) -> list["SearchMatch"]:
+        """Hydrate chunk and document info for returned vector IDs."""
+
+        if not vector_ids:
+            return []
+
+        chunk_repo = self._metadata_manager.chunk_repository
+        document_repo = self._metadata_manager.document_repository
+
+        chunks = chunk_repo.get_chunks_by_vector_ids(list(vector_ids))
+        chunks_by_vector = {chunk.vector_id: chunk for chunk in chunks}
+        doc_ids = {chunk.document_id for chunk in chunks}
+        documents = document_repo.get_by_ids(list(doc_ids))
+        docs_by_id = {doc.id: doc for doc in documents if doc.id is not None}
+
+        matches: list[SearchMatch] = []
+        for idx, vector_id in enumerate(vector_ids):
+            chunk = chunks_by_vector.get(vector_id)
+            if not chunk:
+                continue
+
+            distance = distances[idx] if idx < len(distances) else None
+            matches.append(
+                SearchMatch(
+                    chunk=chunk,
+                    document=docs_by_id.get(chunk.document_id),
+                    distance=distance,
+                )
+            )
+
+        return matches

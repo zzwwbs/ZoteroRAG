@@ -12,7 +12,12 @@ from ..config.settings_manager import SettingsManager
 from ..core.services.embedding_client import EmbeddingClient
 from ..core.services.indexing_service import IndexingService
 from ..core.services.metadata_db_manager import MetadataDBManager
-from ..core.services.search_service import SearchService, SearchServiceError, SearchResult
+from ..core.services.search_service import (
+    SearchMatch,
+    SearchResult,
+    SearchService,
+    SearchServiceError,
+)
 from ..core.services.vector_db_manager import VectorDBManager
 from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
@@ -159,8 +164,9 @@ class MainWindow(QMainWindow):
         self._thread_pool.start(worker)
 
     def _handle_search_result(self, result: SearchResult) -> None:
+        match_count = len(result.matches or [])
         self._search_view.set_status(
-            f"Embedding received ({len(result.query_embedding)} dimensions)."
+            f"Found {match_count} results (embedding {len(result.query_embedding)} dims)."
         )
 
     def _handle_search_error(self, message: str) -> None:
