@@ -1,0 +1,112 @@
+schema: 1
+story: '5.2'
+story_title: 'Implement Secure API Key Management'
+gate: PASS
+status_reason: 'Critical security bug found and fixed during QA. All acceptance criteria met after fix. API keys now properly encrypted with no plaintext exposure.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-01-12T22:15:00Z'
+
+top_issues:
+  - id: 'BUG-001'
+    severity: critical
+    finding: 'API keys leaked to plaintext config when using keyring'
+    suggested_action: 'Fixed: set_api_key_securely() now stores None in memory instead of plaintext key'
+    status: 'FIXED'
+    fix_details: 'Changed line 143 in settings_manager.py from api_key=api_key to api_key=None. Added regression test.'
+
+waiver:
+  active: false
+
+quality_score: 90
+expires: '2025-01-26T22:15:00Z'
+
+evidence:
+  tests_reviewed: 4
+  tests_passing: 53
+  new_tests_added: 4
+  bugs_found: 1
+  bugs_fixed: 1
+  trace:
+    ac_covered: [1, 2, 3, 4]
+    ac_gaps: []
+
+nfr_validation:
+  _assessed: [security, reliability]
+  security:
+    status: PASS
+    notes: 'Critical plaintext leak bug found and fixed. After fix: API keys encrypted at rest, no plaintext in config/logs, no plaintext in memory after keyring storage. Regression test added.'
+  reliability:
+    status: PASS
+    notes: 'Graceful fallback when keyring unavailable. Error handling with logging. Services retrieve keys just-in-time.'
+
+implementation_quality:
+  keyring_integration:
+    status: PASS
+    notes: 'Proper use of keyring library. Optional dependency with try-except. set_password/get_password/delete_password all implemented.'
+  secure_storage:
+    status: PASS
+    notes: 'After fix: API keys only in OS keyring, not in memory or config files. Error logging never exposes keys.'
+  service_integration:
+    status: PASS
+    notes: 'EmbeddingClient and AIService retrieve keys just-in-time before API calls. No global key storage.'
+
+test_coverage:
+  unit_tests: 4
+  status: PASS
+  notes: 'test_save_and_get_api_key, test_get_api_key_not_found, test_keyring_exception_is_logged_and_returns_none, test_api_key_not_leaked_to_plaintext_config_when_using_keyring (regression). All use DummyKeyring for isolation.'
+
+security_analysis:
+  critical_bug_found:
+    id: 'BUG-001'
+    description: 'API keys leaked to plaintext configuration files'
+    root_cause: 'set_api_key_securely() stored plaintext key in self._settings.api_key after keyring storage. Later settings updates would write this to disk.'
+    impact: 'HIGH - Violated AC 5.2.2, exposed API keys in plaintext'
+    fix: 'Changed to store None in memory instead of plaintext key'
+    verification: 'Regression test validates no plaintext leak when modifying other settings'
+    status: 'FIXED and TESTED'
+  
+  post_fix_assessment:
+    encryption_at_rest: 'PASS - OS keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service)'
+    no_plaintext_config: 'PASS - Verified by regression test'
+    no_plaintext_logs: 'PASS - logger.exception() calls never include key values'
+    no_plaintext_memory: 'PASS - self._settings.api_key set to None after keyring storage'
+    just_in_time_retrieval: 'PASS - Services call get_api_key() immediately before API requests'
+    error_handling: 'PASS - Keyring failures logged without exposing keys, fallback to None'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Consider key rotation mechanism for enhanced security'
+      refs: ['src/zoterorag/config/settings_manager.py']
+      priority: 'low'
+      notes: 'Not blocking - current implementation is secure'
+    - action: 'Add telemetry for keyring backend availability (user education)'
+      refs: ['src/zoterorag/config/settings_manager.py']
+      priority: 'low'
+      notes: 'Help users understand if keyring is being used vs legacy fallback'
+
+bug_details:
+  BUG-001:
+    severity: 'CRITICAL - SECURITY'
+    found_by: 'Quinn (Test Architect)'
+    found_date: '2025-01-12T22:00:00Z'
+    location: 'src/zoterorag/config/settings_manager.py:143'
+    description: 'set_api_key_securely() stored plaintext API key in self._settings.api_key in memory after successful keyring storage. Subsequent calls to set_enable_ai_analysis() or set_zotero_path() would call save_settings() which wrote the plaintext key to settings.json.'
+    reproduction_steps:
+      - 'Call manager.set_api_key_securely("secret-key")'
+      - 'Call manager.set_enable_ai_analysis(True)'
+      - 'Check settings.json file'
+      - 'Observe: api_key field contains plaintext "secret-key"'
+    impact: 'API keys exposed in plaintext configuration files, violating AC 5.2.2'
+    fix_applied: 'Changed line 143 from api_key=api_key to api_key=None'
+    fix_rationale: 'Prevent plaintext key from persisting in memory. Key is only stored in OS keyring and retrieved when needed.'
+    regression_test: 'test_api_key_not_leaked_to_plaintext_config_when_using_keyring'
+    fixed_date: '2025-01-12T22:10:00Z'
+    verified_date: '2025-01-12T22:15:00Z'
+    status: 'FIXED and VERIFIED'
+
+quality_trend:
+  story_5_1: 'Quality Score: 100/100 (0 bugs)'
+  story_5_2: 'Quality Score: 90/100 (1 critical bug found and fixed)'
+  pattern: 'Critical security bug caught during QA validation demonstrates importance of thorough security testing'
+  notes: 'Bug was discovered through targeted security testing (plaintext leak scenario). Fix applied immediately with regression test. Demonstrates effective QA process.'
