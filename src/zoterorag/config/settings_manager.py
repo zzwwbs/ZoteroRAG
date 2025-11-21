@@ -24,6 +24,13 @@ class AppSettings:
     zotero_data_path: str | None = None
     api_key: str | None = None  # legacy support only; secure store preferred
     enable_ai_analysis: bool = False
+    api_base_url: str = "https://api.openai.com/v1"
+    embedding_model: str = "text-embedding-ada-002"
+    chat_model: str = "gpt-4o-mini"
+    chunk_size: int = 600
+    chunk_overlap: int = 100
+    default_search_results: int = 10
+    theme: str = "auto"
     keyring_service: str = "zoterorag"
 
 
@@ -59,6 +66,13 @@ class SettingsManager:
             zotero_data_path=raw.get("zotero_data_path"),
             api_key=raw.get("api_key"),
             enable_ai_analysis=bool(raw.get("enable_ai_analysis", False)),
+            api_base_url=raw.get("api_base_url", "https://api.openai.com/v1"),
+            embedding_model=raw.get("embedding_model", "text-embedding-ada-002"),
+            chat_model=raw.get("chat_model", "gpt-4o-mini"),
+            chunk_size=int(raw.get("chunk_size", 600)),
+            chunk_overlap=int(raw.get("chunk_overlap", 100)),
+            default_search_results=int(raw.get("default_search_results", 10)),
+            theme=raw.get("theme", "auto"),
             keyring_service=raw.get("keyring_service", "zoterorag"),
         )
 
@@ -72,6 +86,13 @@ class SettingsManager:
             "zotero_data_path": settings.zotero_data_path,
             "api_key": api_key_to_store,
             "enable_ai_analysis": settings.enable_ai_analysis,
+            "api_base_url": settings.api_base_url,
+            "embedding_model": settings.embedding_model,
+            "chat_model": settings.chat_model,
+            "chunk_size": settings.chunk_size,
+            "chunk_overlap": settings.chunk_overlap,
+            "default_search_results": settings.default_search_results,
+            "theme": settings.theme,
             "keyring_service": settings.keyring_service,
         }
         self._settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -156,6 +177,13 @@ class SettingsManager:
                 zotero_data_path=self._settings.zotero_data_path,
                 api_key=self._settings.api_key,
                 enable_ai_analysis=enabled,
+                api_base_url=self._settings.api_base_url,
+                embedding_model=self._settings.embedding_model,
+                chat_model=self._settings.chat_model,
+                chunk_size=self._settings.chunk_size,
+                chunk_overlap=self._settings.chunk_overlap,
+                default_search_results=self._settings.default_search_results,
+                theme=self._settings.theme,
                 keyring_service=self._keyring_service,
             )
         )
