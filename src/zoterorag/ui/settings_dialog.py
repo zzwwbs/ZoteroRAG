@@ -74,12 +74,17 @@ class SettingsDialog(QDialog):
             self._settings_manager.set_api_key_securely(api_key)
 
         enable_ai = self._ai_toggle.isChecked()
+        # Get current API key to preserve it in settings
+        current_api_key = self._settings_manager.get_api_key()
         new_settings = AppSettings(
             zotero_data_path=self._settings_manager.get_zotero_path()
             and str(self._settings_manager.get_zotero_path()),
+            api_key=current_api_key,
             enable_ai_analysis=enable_ai,
         )
         self._settings_manager.save_settings(new_settings)
+        # Refresh settings from keyring after save
+        self._settings_manager.refresh()
         self.accept()
 
     def _handle_test(self) -> None:

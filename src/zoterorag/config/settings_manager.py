@@ -59,9 +59,13 @@ class SettingsManager:
 
     def save_settings(self, settings: AppSettings) -> None:
         """Persist the provided settings to disk."""
+        api_key_to_store = settings.api_key
+        if api_key_to_store is None and keyring is None:
+            api_key_to_store = self._settings.api_key
+
         payload: dict[str, Any] = {
             "zotero_data_path": settings.zotero_data_path,
-            "api_key": settings.api_key,
+            "api_key": api_key_to_store,
             "enable_ai_analysis": settings.enable_ai_analysis,
         }
         self._settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -124,6 +128,12 @@ class SettingsManager:
                     keyring.set_password(self._keyring_service, "api_key", api_key)
                 else:
                     keyring.delete_password(self._keyring_service, "api_key")
+                # Keep in-memory settings consistent so get_api_key can fall back cleanly.
+                self._settings = AppSettings(
+                    zotero_data_path=self._settings.zotero_data_path,
+                    api_key=api_key,
+                    enable_ai_analysis=self._settings.enable_ai_analysis,
+                )
                 return
             except Exception:
                 # Fall back to file-based storage if keyring errors
