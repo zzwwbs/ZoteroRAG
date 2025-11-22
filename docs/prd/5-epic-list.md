@@ -6,3 +6,6 @@
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
 *   **Epic 5: Application Hardening & User Experience:** Focus on robust error handling, secure API key management, comprehensive settings, and packaging for cross-platform deployment, ensuring the application is reliable, secure, and user-friendly for release.
 *   **Epic 6: UI/UX Enhancements & Usability Polish:** Implement significant UI/UX improvements based on user feedback, including a tab-based interface, indexing cancellation, improved data visibility, and enhanced result readability.
+*   **Epic 7: Enhanced AI Configuration & Chat Experience:** Enable flexible AI provider configuration and transform AI Analysis into an interactive chat interface with user-controlled retrieval.
+*   **Epic 8: Indexing & Search UX Improvements:** Improve visibility of indexing status and optimize post-indexing workflow.
+*   **Epic 9: Search Tab Action Reorganization:** Improve Search tab button layout and labeling clarity.
