@@ -2,9 +2,10 @@ schema: 1
 story: '6.5'
 story_title: 'Reposition Chunk Count Selector'
 gate: PASS
-status_reason: 'All acceptance criteria met. Chunk count selector successfully repositioned with clean architecture and comprehensive testing.'
+status_reason: 'All acceptance criteria met. Chunk count selector successfully repositioned with clean architecture and comprehensive testing. Hotfix v1.1 applied.'
 reviewer: 'Quinn (Test Architect)'
-updated: '2025-11-22T17:00:00Z'
+updated: '2025-11-22T18:00:00Z'
+version: '1.1'
 
 quality_score: 100
 expires: '2025-12-06T17:00:00Z'

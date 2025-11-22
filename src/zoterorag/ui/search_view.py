@@ -10,13 +10,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QSpinBox,
 )
 
 
 class SearchView(QWidget):
     """Simple search input with keyboard and button activation."""
 
-    search_triggered = Signal(str)
+    search_triggered = Signal(str, int)
     copy_to_chatgpt_requested = Signal()
     export_pdfs_requested = Signal()
 
@@ -28,6 +29,13 @@ class SearchView(QWidget):
         self._input.setPlaceholderText("Ask a question...")
         self._input.setAccessibleName("Search query input")
         self._input.returnPressed.connect(self._emit_search)
+
+        self._results_label = QLabel("Results:")
+        self._result_count = QSpinBox()
+        self._result_count.setRange(1, 50)
+        self._result_count.setValue(10)
+        self._result_count.setAccessibleName("Search result count")
+        self.result_count = self._result_count
 
         self._start_button = QPushButton("Search")
         self._start_button.setAccessibleName("Start search")
@@ -50,6 +58,8 @@ class SearchView(QWidget):
 
         row = QHBoxLayout()
         row.addWidget(self._input, stretch=1)
+        row.addWidget(self._results_label)
+        row.addWidget(self._result_count)
         row.addWidget(self._start_button)
         row.addWidget(self._copy_button)
         row.addWidget(self._export_button)
@@ -66,13 +76,14 @@ class SearchView(QWidget):
         if not text:
             self._status_label.setText("Enter a query to search.")
             return
-        self.search_triggered.emit(text)
+        self.search_triggered.emit(text, int(self._result_count.value()))
 
     def set_busy(self, busy: bool) -> None:
         """Toggle busy state and update UI affordances."""
 
         self._is_busy = busy
         self._input.setDisabled(busy)
+        self._result_count.setDisabled(busy)
         self._start_button.setDisabled(busy)
         self._copy_button.setDisabled(busy)
         self._export_button.setDisabled(busy)

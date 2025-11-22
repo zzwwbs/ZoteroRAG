@@ -35,10 +35,10 @@ class FakeSettings:
 class FakeSearchService:
     def __init__(self, should_fail: bool = False) -> None:
         self.should_fail = should_fail
-        self.calls: list[str] = []
+        self.calls: list[tuple[str, int | None]] = []
 
     def search(self, query: str, *, k: int | None = None) -> SearchResult:
-        self.calls.append(query)
+        self.calls.append((query, k))
         if self.should_fail:
             raise SearchServiceError("Embedding lookup failed")
         return SearchResult(
@@ -98,7 +98,7 @@ def test_search_success_updates_status_and_calls_service(qapp):
     window._search_view._input.setText("deep learning")
     window._search_view._start_button.click()
 
-    assert service.calls == ["deep learning"]
+    assert service.calls == [("deep learning", 10)]
     assert window._search_view.is_busy() is False
     assert "Found" in window._search_view._status_label.text()
 

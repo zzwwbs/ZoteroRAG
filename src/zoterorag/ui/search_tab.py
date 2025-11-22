@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
 from .chunk_list_view import ChunkListView
 from .chunk_detail_dialog import ChunkDetailDialog
@@ -20,24 +20,16 @@ class SearchTab(QWidget):
         self.chunk_list_view = ChunkListView()
         self._chunk_detail_dialog: ChunkDetailDialog | None = None
 
-        self.chunk_count = QSpinBox()
-        self.chunk_count.setRange(1, 50)
-        self.chunk_count.setValue(10)
-        self.chunk_count.setEnabled(False)
+        self.chunk_count = self.search_view.result_count
 
         self.analyze_button = QPushButton("Analyze with AI")
         self.analyze_button.setEnabled(False)
         self.analyze_button.setProperty("busy", False)
 
-        chunk_row = QHBoxLayout()
-        chunk_row.addWidget(QLabel("Chunks:"))
-        chunk_row.addWidget(self.chunk_count)
-
         layout = QVBoxLayout(self)
         layout.addWidget(self.search_view)
         layout.addWidget(self.paper_list_view)
         layout.addWidget(self.chunk_list_view)
-        layout.addLayout(chunk_row)
         layout.addWidget(self.analyze_button)
         layout.addStretch()
 

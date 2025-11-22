@@ -291,8 +291,8 @@ class MainWindow(QMainWindow):
         self._indexing_scope_view.set_busy(False)
         self.index_tab.show_idle()
 
-    def _on_search(self, query: str) -> None:
-        worker = _SearchRunnable(self._search_service, query)
+    def _on_search(self, query: str, count: int) -> None:
+        worker = _SearchRunnable(self._search_service, query, count)
         worker.signals.result.connect(self._handle_search_result)
         worker.signals.error.connect(self._handle_search_error)
         worker.signals.finished.connect(self._handle_search_finished)
@@ -486,10 +486,9 @@ class MainWindow(QMainWindow):
         busy = bool(self._analyze_button.property("busy"))
         enabled = can_analyze and has_results and not busy
         self._analyze_button.setVisible(can_analyze)
-        self._chunk_count.setVisible(can_analyze)
         self._analysis_loading.setVisible(busy)
         self._analyze_button.setEnabled(enabled)
-        self._chunk_count.setEnabled(enabled)
+        self._chunk_count.setEnabled(not busy)
         if not can_analyze:
             self._analysis_label.setText("")
             self._analysis_loading.setText("AI analysis unavailable; configure settings.")
@@ -529,15 +528,16 @@ class _SearchWorkerSignals(QObject):
 class _SearchRunnable(QRunnable):
     """Background task runner for search requests."""
 
-    def __init__(self, service: SearchService, query: str) -> None:
+    def __init__(self, service: SearchService, query: str, count: int) -> None:
         super().__init__()
         self._service = service
         self._query = query
+        self._count = count
         self.signals = _SearchWorkerSignals()
 
     def run(self) -> None:
         try:
-            result = self._service.search(self._query)
+            result = self._service.search(self._query, k=self._count)
             self.signals.result.emit(result)
         except SearchServiceError as error:
             self.signals.error.emit(str(error))
