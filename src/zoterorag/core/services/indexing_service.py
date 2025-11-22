@@ -184,7 +184,10 @@ class IndexingService:
             for chunk in chunks:
                 embedding, usage = embedding_client.get_embedding(chunk.content)
                 if usage.tokens_used > 0:
-                    self._metadata_manager.token_usage_repository.insert(usage)
+                    try:
+                        self._metadata_manager.token_usage_repository.insert(usage)
+                    except Exception:  # pragma: no cover - safety
+                        logger.exception("Failed to record token usage for indexing")
                     if self._usage_callback:
                         self._usage_callback(usage)
                 vector_id = self._metadata_manager.get_next_vector_id()

@@ -98,7 +98,7 @@ class AIService:
         try:
             content = data["choices"][0]["message"]["content"]
             usage_payload = data.get("usage") or {}
-            tokens = int(usage_payload.get("total_tokens") or 0)
+            tokens, prompt_tokens, completion_tokens = self._extract_tokens(usage_payload)
         except (KeyError, IndexError, TypeError, ValueError) as error:
             raise AIServiceError("Invalid response format from AI API.") from error
 
@@ -106,11 +106,38 @@ class AIService:
             operation="chat_completion",
             tokens_used=tokens,
             model=self._model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
         if self._metadata_manager:
-            self._metadata_manager.token_usage_repository.insert(usage)
+            try:
+                self._metadata_manager.token_usage_repository.insert(usage)
+            except Exception:  # pragma: no cover - safety
+                logger.exception("Failed to record token usage for AI analysis")
 
         return self._apply_citations(content, citations), usage
+
+    @staticmethod
+    def _extract_tokens(usage_payload: dict) -> tuple[int, int, int]:
+        """Return total, prompt, completion tokens with fallbacks."""
+
+        prompt = usage_payload.get("prompt_tokens") or usage_payload.get("input_tokens") or 0
+        completion = usage_payload.get("completion_tokens") or usage_payload.get("output_tokens") or 0
+        total = usage_payload.get("total_tokens")
+        if total is None:
+            total = int(prompt) + int(completion)
+        else:
+            try:
+                total = int(total)
+            except Exception:
+                logger.debug("Unexpected total_tokens type in usage payload: %s", usage_payload)
+                total = int(prompt) + int(completion)
+
+        if int(total) == 0 and (prompt or completion):
+            logger.debug("Usage payload missing total_tokens; using prompt/completion values: %s", usage_payload)
+        elif int(total) == 0:
+            logger.debug("Usage payload has no token data: %s", usage_payload)
+        return int(total), int(prompt), int(completion)
 
     @staticmethod
     def _build_citations(matches: Sequence[SearchMatch]) -> list[Citation]:

@@ -94,6 +94,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._stack)
         self._token_status = QLabel("Tokens: 0")
         self._session_token_total = 0
+        self._session_embedding_tokens = 0
+        self._session_analysis_tokens = 0
+        self._session_embedding_prompt = 0
+        self._session_analysis_prompt = 0
+        self._session_analysis_completion = 0
+        self._session_embedding_model: str | None = None
+        self._session_analysis_model: str | None = None
         self.statusBar().addPermanentWidget(self._token_status)
 
         self._onboarding_view = OnboardingView(self._zotero_manager)
@@ -128,7 +135,7 @@ class MainWindow(QMainWindow):
         self._analysis_loading = self.analysis_tab.loading_label
         self._token_usage_widget = self.analysis_tab.token_usage_widget
 
-        self.settings_tab = SettingsTab()
+        self.settings_tab = SettingsTab(self._settings_manager, self._open_settings_dialog)
 
         self._main_tabs = QTabWidget()
         self._main_tabs.addTab(self.search_tab, "Search")
@@ -456,6 +463,7 @@ class MainWindow(QMainWindow):
         )
         if dialog.exec():
             self._load_state_from_settings()
+            self.settings_tab.refresh()
 
     def _validate_api_key(self, api_key: str) -> None:
         """Lightweight embedding request to validate API key."""
@@ -513,8 +521,24 @@ class MainWindow(QMainWindow):
             tokens = int(getattr(usage, "tokens_used", 0))
         except Exception:
             tokens = 0
-        self._session_token_total += max(0, tokens)
-        self._token_status.setText(f"Tokens: {self._session_token_total}")
+        prompt = max(0, getattr(usage, "prompt_tokens", 0))
+        completion = max(0, getattr(usage, "completion_tokens", 0))
+        op = getattr(usage, "operation", "")
+        if op == "embedding":
+            self._session_embedding_tokens += max(0, tokens)
+            self._session_embedding_prompt += prompt
+            self._session_embedding_model = getattr(usage, "model", None)
+        elif op == "chat_completion":
+            self._session_analysis_tokens += max(0, tokens)
+            self._session_analysis_prompt += prompt
+            self._session_analysis_completion += completion
+            self._session_analysis_model = getattr(usage, "model", None)
+        self._token_status.setText(
+            f"Embedding ({self._session_embedding_model or '-'}) "
+            f"{self._session_embedding_prompt} tokens "
+            f"| AI Analysis ({self._session_analysis_model or '-'}) "
+            f"{self._session_analysis_prompt} prompt / {self._session_analysis_completion} completion tokens"
+        )
 
 
 class _IndexingWorkerSignals(QObject):

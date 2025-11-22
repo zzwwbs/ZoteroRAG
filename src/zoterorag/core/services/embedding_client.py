@@ -101,8 +101,12 @@ class EmbeddingClient:
 
     def _build_usage(self, usage_payload: dict[str, Any], *, model: str) -> TokenUsage:
         tokens = int(usage_payload.get("total_tokens") or 0)
+        prompt = int(usage_payload.get("prompt_tokens") or usage_payload.get("input_tokens") or 0)
+        completion = int(usage_payload.get("completion_tokens") or usage_payload.get("output_tokens") or 0)
         return TokenUsage(
             operation="embedding",
             tokens_used=tokens,
             model=model,
+            prompt_tokens=prompt,
+            completion_tokens=completion,
         )

@@ -38,6 +38,8 @@ class TokenUsage:
     operation: str  # "embedding" or "chat_completion"
     tokens_used: int
     model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
     timestamp: datetime = field(default_factory=datetime.utcnow)
     id: int | None = None
 

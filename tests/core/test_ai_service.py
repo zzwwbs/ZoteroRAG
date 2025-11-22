@@ -74,7 +74,10 @@ def test_analyze_chunks_replaces_placeholders():
         )
         return FakeResponse(
             True,
-            payload={"choices": [{"message": {"content": content}}]},
+            payload={
+                "choices": [{"message": {"content": content}}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+            },
         )
 
     session = FakeSession(responder)
@@ -86,7 +89,7 @@ def test_analyze_chunks_replaces_placeholders():
     )
     result, usage = service.analyze_chunks("query", [_match()], top_n=5)
     assert "[1]" in result
-    assert usage.tokens_used == 0
+    assert usage.tokens_used == 7
     # Verify payload chunk inclusion
     sent = session.requests[0]["json"]
     user_content = sent["messages"][1]["content"]

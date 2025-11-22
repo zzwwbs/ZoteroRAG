@@ -143,14 +143,16 @@ class TokenUsageRepository:
     def insert(self, usage: TokenUsage) -> TokenUsage:
         cursor = self._connection.execute(
             """
-            INSERT INTO token_usage (timestamp, operation, tokens_used, model)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO token_usage (timestamp, operation, tokens_used, model, prompt_tokens, completion_tokens)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 usage.timestamp.isoformat(),
                 usage.operation,
                 usage.tokens_used,
                 usage.model,
+                usage.prompt_tokens,
+                usage.completion_tokens,
             ),
         )
         self._connection.commit()

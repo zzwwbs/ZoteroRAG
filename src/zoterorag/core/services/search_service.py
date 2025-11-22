@@ -67,7 +67,10 @@ class SearchService:
         try:
             query_embedding, usage = self._embedding_client.get_embedding(normalized)
             if usage.tokens_used > 0:
-                self._metadata_manager.token_usage_repository.insert(usage)
+                try:
+                    self._metadata_manager.token_usage_repository.insert(usage)
+                except Exception:  # pragma: no cover - safety
+                    logger.exception("Failed to record token usage for embedding")
         except EmbeddingClientError as error:
             raise SearchServiceError(str(error)) from error
 

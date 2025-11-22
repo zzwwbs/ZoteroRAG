@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS token_usage (
     timestamp TEXT NOT NULL,
     operation TEXT NOT NULL,
     tokens_used INTEGER NOT NULL,
-    model TEXT NOT NULL
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0
 );
 """
 
@@ -60,6 +62,20 @@ class MetadataDBManager:
         connection = self._get_connection()
         connection.executescript(SCHEMA_SQL)
         connection.commit()
+        self._ensure_token_usage_columns(connection)
+
+    def _ensure_token_usage_columns(self, connection: sqlite3.Connection) -> None:
+        """Add missing token_usage columns for existing installs."""
+
+        columns = {
+            row["name"]: True
+            for row in connection.execute("PRAGMA table_info(token_usage)").fetchall()
+        }
+        if "prompt_tokens" not in columns:
+            connection.execute("ALTER TABLE token_usage ADD COLUMN prompt_tokens INTEGER DEFAULT 0")
+        if "completion_tokens" not in columns:
+            connection.execute("ALTER TABLE token_usage ADD COLUMN completion_tokens INTEGER DEFAULT 0")
+        connection.commit()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get or create a connection for the current thread."""
@@ -67,6 +83,8 @@ class MetadataDBManager:
             self._local.connection = sqlite3.connect(self._db_path)
             self._local.connection.row_factory = sqlite3.Row
             self._local.connection.execute("PRAGMA foreign_keys = ON")
+            # Ensure latest schema for new thread connections
+            self._ensure_token_usage_columns(self._local.connection)
         return self._local.connection
 
     def close(self) -> None:
