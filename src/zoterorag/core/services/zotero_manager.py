@@ -8,7 +8,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from platform import system
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 from ..data.models import Collection
 
@@ -116,6 +116,80 @@ class ZoteroManager:
             ) from error
         except Exception as error:
             logger.exception("Unexpected error while reading Zotero items")
+            raise ZoteroDatabaseError(str(error)) from error
+
+    def get_total_paper_count(self) -> int:
+        """Return total count of papers excluding attachments and notes."""
+
+        db_file = self._get_database_file()
+        if not db_file:
+            raise ZoteroDatabaseError("Zotero database not configured or missing.")
+
+        query = (
+            "SELECT COUNT(DISTINCT items.itemID) AS total "
+            "FROM items "
+            "WHERE (items.itemTypeID IS NULL OR items.itemTypeID NOT IN (1, 14))"
+        )
+
+        try:
+            with self._connect_to_database(db_file) as connection:
+                connection.row_factory = sqlite3.Row
+                row = connection.execute(query).fetchone()
+                return int(row["total"] if row else 0)
+        except sqlite3.OperationalError:
+            # Fallback for databases without itemTypeID column
+            try:
+                with self._connect_to_database(db_file) as connection:
+                    connection.row_factory = sqlite3.Row
+                    row = connection.execute("SELECT COUNT(DISTINCT itemID) AS total FROM items").fetchone()
+                    return int(row["total"] if row else 0)
+            except Exception as error:
+                logger.exception("Unexpected error while counting papers (fallback)")
+                raise ZoteroDatabaseError(str(error)) from error
+        except Exception as error:
+            logger.exception("Unexpected error while counting papers")
+            raise ZoteroDatabaseError(str(error)) from error
+
+    def get_collection_paper_counts(self) -> Dict[int, int]:
+        """Return a mapping of collectionID to paper count (including zero-count collections)."""
+
+        db_file = self._get_database_file()
+        if not db_file:
+            raise ZoteroDatabaseError("Zotero database not configured or missing.")
+
+        query = (
+            "SELECT c.collectionID, "
+            "COUNT(DISTINCT ci.itemID) AS paper_count "
+            "FROM collections c "
+            "LEFT JOIN collectionItems ci ON c.collectionID = ci.collectionID "
+            "LEFT JOIN items i ON i.itemID = ci.itemID "
+            "WHERE (i.itemTypeID IS NULL OR i.itemTypeID NOT IN (1, 14)) "
+            "   OR ci.itemID IS NULL "
+            "GROUP BY c.collectionID"
+        )
+
+        try:
+            with self._connect_to_database(db_file) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(query).fetchall()
+                return {int(row["collectionID"]): int(row["paper_count"] or 0) for row in rows}
+        except sqlite3.OperationalError:
+            # Fallback when itemTypeID column is absent; still include zero counts.
+            try:
+                with self._connect_to_database(db_file) as connection:
+                    connection.row_factory = sqlite3.Row
+                    rows = connection.execute(
+                        "SELECT c.collectionID, COUNT(DISTINCT ci.itemID) AS paper_count "
+                        "FROM collections c "
+                        "LEFT JOIN collectionItems ci ON c.collectionID = ci.collectionID "
+                        "GROUP BY c.collectionID"
+                    ).fetchall()
+                    return {int(row["collectionID"]): int(row["paper_count"] or 0) for row in rows}
+            except Exception as error:
+                logger.exception("Unexpected error while counting collection papers (fallback)")
+                raise ZoteroDatabaseError(str(error)) from error
+        except Exception as error:
+            logger.exception("Unexpected error while counting collection papers")
             raise ZoteroDatabaseError(str(error)) from error
 
     def _row_to_item(self, row: sqlite3.Row) -> ZoteroItem:

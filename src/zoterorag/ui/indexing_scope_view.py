@@ -59,13 +59,14 @@ class IndexingScopeView(QWidget):
         layout.addWidget(self._start_button)
         layout.addWidget(self._status_label)
 
-    def set_collections(self, collections: Iterable[Collection]) -> None:
+    def set_collections(self, collections: Iterable[Collection], counts: dict[int, int] | None = None) -> None:
         """Populate the combobox with available collections."""
 
         self._collections = list(collections)
         self._collection_combo.clear()
+        counts = counts or {}
         for collection in self._collections:
-            label = collection.name
+            label = self._format_collection_label(collection, counts.get(collection.id, 0))
             self._collection_combo.addItem(label, userData=collection)
 
         self._update_collection_controls()
@@ -123,6 +124,14 @@ class IndexingScopeView(QWidget):
 
     def set_status_message(self, message: str) -> None:
         self._status_label.setText(message)
+
+    def set_total_paper_count(self, count: int) -> None:
+        """Update the entire library radio label with count."""
+        self._entire_radio.setText(f"Entire Library ({count} papers)")
+
+    def _format_collection_label(self, collection: Collection, count: int) -> str:
+        suffix = "paper" if count == 1 else "papers"
+        return f"{collection.name} ({count} {suffix})"
 
     def _handle_start_or_cancel(self) -> None:
         if self._cancel_mode:

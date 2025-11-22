@@ -35,7 +35,7 @@ def test_scope_emits_for_collection(qapp):
         Collection(id=1, name="Papers", zotero_collection_key="AAA"),
         Collection(id=2, name="Books", zotero_collection_key="BBB", parent_id=1),
     ]
-    view.set_collections(collections)
+    view.set_collections(collections, {1: 5, 2: 0})
     view._collection_radio.setChecked(True)
     view._collection_combo.setCurrentIndex(1)
 
@@ -47,3 +47,17 @@ def test_scope_emits_for_collection(qapp):
     assert payload["type"] == "collection"
     assert payload["id"] == 2
     assert payload["key"] == "BBB"
+
+
+def test_labels_include_counts(qapp):
+    view = IndexingScopeView()
+    view.set_total_paper_count(3)
+    assert "3" in view._entire_radio.text()
+
+    collections = [
+        Collection(id=1, name="Papers", zotero_collection_key="AAA"),
+        Collection(id=2, name="Empty", zotero_collection_key="BBB"),
+    ]
+    view.set_collections(collections, {1: 2, 2: 0})
+    assert "2 papers" in view._collection_combo.itemText(0)
+    assert "0 papers" in view._collection_combo.itemText(1)

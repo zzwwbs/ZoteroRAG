@@ -11,6 +11,32 @@ from zoterorag.core.services.zotero_manager import (
 )
 
 
+def _build_items_schema(connection: sqlite3.Connection) -> None:
+    cursor = connection.cursor()
+    cursor.execute(
+        "CREATE TABLE items("
+        "itemID INTEGER PRIMARY KEY, "
+        "key TEXT, "
+        "itemTypeID INTEGER, "
+        "dateAdded TEXT)"
+    )
+    cursor.execute(
+        "CREATE TABLE fields(fieldID INTEGER PRIMARY KEY, fieldName TEXT UNIQUE NOT NULL)"
+    )
+    cursor.execute(
+        "CREATE TABLE itemData(itemDataID INTEGER PRIMARY KEY, itemID INTEGER, fieldID INTEGER, valueID INTEGER)"
+    )
+    cursor.execute(
+        "CREATE TABLE itemDataValues(valueID INTEGER PRIMARY KEY, value TEXT)"
+    )
+    cursor.execute(
+        "CREATE TABLE itemCreators(itemCreatorID INTEGER PRIMARY KEY, itemID INTEGER, creatorID INTEGER)"
+    )
+    cursor.execute(
+        "CREATE TABLE creators(creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, name TEXT)"
+    )
+
+
 def test_detect_uses_env_var(monkeypatch, tmp_path: Path) -> None:
     candidate = tmp_path / "app"
     candidate.mkdir()
@@ -46,27 +72,14 @@ def test_get_all_items_returns_expected_data(tmp_path: Path) -> None:
     db_file = db_dir / "zotero.sqlite"
 
     connection = sqlite3.connect(db_file)
+    _build_items_schema(connection)
     cursor = connection.cursor()
-    cursor.execute("CREATE TABLE items(itemID INTEGER PRIMARY KEY, key TEXT, dateAdded TEXT)")
-    cursor.execute("CREATE TABLE creators(creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, name TEXT)")
-    cursor.execute(
-        "CREATE TABLE itemCreators(itemCreatorID INTEGER PRIMARY KEY, itemID INTEGER, creatorID INTEGER)"
-    )
-    cursor.execute(
-        "CREATE TABLE fields(fieldID INTEGER PRIMARY KEY, fieldName TEXT UNIQUE NOT NULL)"
-    )
-    cursor.execute(
-        "CREATE TABLE itemData(itemDataID INTEGER PRIMARY KEY, itemID INTEGER, fieldID INTEGER, valueID INTEGER)"
-    )
-    cursor.execute(
-        "CREATE TABLE itemDataValues(valueID INTEGER PRIMARY KEY, value TEXT)"
-    )
 
     cursor.executemany(
         "INSERT INTO fields(fieldID, fieldName) VALUES (?, ?)",
         [(1, "title"), (2, "date")],
     )
-    cursor.execute("INSERT INTO items(itemID, key, dateAdded) VALUES (1, 'AAA', '2024-01-01')")
+    cursor.execute("INSERT INTO items(itemID, key, dateAdded, itemTypeID) VALUES (1, 'AAA', '2024-01-01', 2)")
     cursor.execute("INSERT INTO itemDataValues(valueID, value) VALUES (1, 'Test Title')")
     cursor.execute("INSERT INTO itemDataValues(valueID, value) VALUES (2, '2022-01-01')")
     cursor.execute(
@@ -163,3 +176,70 @@ def test_get_collections_returns_all_rows(tmp_path: Path) -> None:
     assert len(collections) == 2
     assert collections[0].name == "Root"
     assert collections[1].parent_id == 1
+
+
+def test_get_total_paper_count_excludes_notes_and_attachments(tmp_path: Path) -> None:
+    db_dir = tmp_path / "zotero"
+    db_dir.mkdir()
+    db_file = db_dir / "zotero.sqlite"
+
+    connection = sqlite3.connect(db_file)
+    _build_items_schema(connection)
+    cursor = connection.cursor()
+    cursor.executemany(
+        "INSERT INTO items(itemID, key, itemTypeID, dateAdded) VALUES (?, ?, ?, '2024-01-01')",
+        [
+            (1, "A", 2),   # regular paper
+            (2, "B", 14),  # attachment (exclude)
+            (3, "C", 1),   # note (exclude)
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    manager = ZoteroManager(zotero_path=db_dir)
+    assert manager.get_total_paper_count() == 1
+
+
+def test_get_collection_paper_counts_returns_zero_and_counts(tmp_path: Path) -> None:
+    db_dir = tmp_path / "zotero"
+    db_dir.mkdir()
+    db_file = db_dir / "zotero.sqlite"
+
+    connection = sqlite3.connect(db_file)
+    _build_items_schema(connection)
+    cursor = connection.cursor()
+    cursor.execute(
+        "CREATE TABLE collections (collectionID INTEGER PRIMARY KEY, collectionName TEXT, key TEXT, parentCollectionID INTEGER)"
+    )
+    cursor.execute(
+        "CREATE TABLE collectionItems (collectionID INTEGER, itemID INTEGER)"
+    )
+    cursor.executemany(
+        "INSERT INTO collections(collectionID, collectionName, key, parentCollectionID) VALUES (?, ?, ?, ?)",
+        [
+            (1, "Root", "AAA", None),
+            (2, "Empty", "BBB", None),
+        ],
+    )
+    cursor.executemany(
+        "INSERT INTO items(itemID, key, itemTypeID, dateAdded) VALUES (?, ?, ?, '2024-01-01')",
+        [
+            (10, "A", 2),
+            (11, "B", 2),
+        ],
+    )
+    cursor.executemany(
+        "INSERT INTO collectionItems(collectionID, itemID) VALUES (?, ?)",
+        [
+            (1, 10),
+            (1, 11),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    manager = ZoteroManager(zotero_path=db_dir)
+    counts = manager.get_collection_paper_counts()
+    assert counts[1] == 2
+    assert counts[2] == 0

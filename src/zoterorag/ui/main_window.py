@@ -175,7 +175,10 @@ class MainWindow(QMainWindow):
             items = self._zotero_manager.get_all_items()
             self._library_view.set_items(items)
             collections = self._zotero_manager.get_collections()
-            self._indexing_scope_view.set_collections(collections)
+            total_papers = self._zotero_manager.get_total_paper_count()
+            collection_counts = self._zotero_manager.get_collection_paper_counts()
+            self._indexing_scope_view.set_total_paper_count(total_papers)
+            self._indexing_scope_view.set_collections(collections, collection_counts)
             self._maybe_enable_search_from_existing_index()
         except ZoteroDatabaseError as error:
             self._library_view.show_error(str(error))
