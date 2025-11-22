@@ -80,7 +80,6 @@ class AIService:
                 },
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.2,
         }
 
         try:
@@ -98,6 +97,11 @@ class AIService:
         try:
             content = data["choices"][0]["message"]["content"]
             usage_payload = data.get("usage") or {}
+            print(
+                f"[AIService] usage payload (model={self._model}, base_url={self._base_url}): {usage_payload}",
+                flush=True,
+            )
+            logger.info("AI analysis usage payload (model=%s, base_url=%s): %s", self._model, self._base_url, usage_payload)
             tokens, prompt_tokens, completion_tokens = self._extract_tokens(usage_payload)
         except (KeyError, IndexError, TypeError, ValueError) as error:
             raise AIServiceError("Invalid response format from AI API.") from error

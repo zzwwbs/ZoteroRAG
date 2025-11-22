@@ -70,12 +70,23 @@ class MainWindow(QMainWindow):
         self.resize(1024, 768)
 
         self._settings_manager = settings_manager or SettingsManager()
+        initial_settings = self._settings_manager.load_settings()
         self._zotero_manager = zotero_manager or ZoteroManager()
         self._thread_pool = thread_pool or QThreadPool.globalInstance()
         self._metadata_manager = MetadataDBManager()
         self._vector_manager = VectorDBManager(dimension=1536)
-        self._embedding_client = EmbeddingClient(self._settings_manager)
-        self._ai_service = AIService(self._settings_manager, metadata_manager=self._metadata_manager)
+        self._embedding_client = EmbeddingClient(
+            self._settings_manager,
+            base_url=initial_settings.api_base_url,
+            model=initial_settings.embedding_model,
+        )
+        self._ai_service = AIService(
+            self._settings_manager,
+            base_url=initial_settings.api_base_url,
+            model=initial_settings.chat_model,
+            metadata_manager=self._metadata_manager,
+        )
+        self._search_service_provided = search_service is not None
         self._search_service = search_service or SearchService(
             self._embedding_client,
             self._vector_manager,
@@ -356,7 +367,8 @@ class MainWindow(QMainWindow):
         worker.signals.result.connect(self._handle_analysis_result)
         worker.signals.error.connect(self._handle_analysis_error)
         worker.signals.finished.connect(self._handle_analysis_finished)
-        worker.signals.usage.connect(self.token_usage_recorded.emit)
+        worker.signals.usage.connect(self._handle_token_usage)
+        worker.signals.usage.connect(self._token_usage_widget.update_usage)
         self._set_analysis_busy(True)
         self._analysis_loading.setVisible(True)
         self._analysis_loading.setText("Analyzing with AI...")
@@ -482,6 +494,30 @@ class MainWindow(QMainWindow):
     def _load_state_from_settings(self) -> None:
         """Load enable_ai_analysis flag from persisted settings."""
         settings = self._settings_manager.load_settings()
+        if not self._search_service_provided:
+            self._embedding_client = EmbeddingClient(
+                self._settings_manager,
+                base_url=settings.api_base_url,
+                model=settings.embedding_model,
+            )
+            self._search_service = SearchService(
+                self._embedding_client,
+                self._vector_manager,
+                self._metadata_manager,
+            )
+            self._ai_service = AIService(
+                self._settings_manager,
+                base_url=settings.api_base_url,
+                model=settings.chat_model,
+                metadata_manager=self._metadata_manager,
+            )
+        # Always refresh indexing service to use current embedding client
+        self._indexing_service = IndexingService(
+            self._zotero_manager,
+            metadata_manager=self._metadata_manager,
+            vector_manager=self._vector_manager,
+            embedding_client=self._embedding_client,
+        )
         self._state.enable_ai_analysis = settings.enable_ai_analysis
         self._update_analysis_controls()
 
@@ -517,6 +553,23 @@ class MainWindow(QMainWindow):
 
     def _handle_token_usage(self, usage) -> None:
         """Update status bar and session totals when token usage is recorded."""
+        print(
+            "[UI] token usage received",
+            "op=", getattr(usage, "operation", None),
+            "model=", getattr(usage, "model", None),
+            "total=", getattr(usage, "tokens_used", None),
+            "prompt=", getattr(usage, "prompt_tokens", None),
+            "completion=", getattr(usage, "completion_tokens", None),
+            flush=True,
+        )
+        logger.info(
+            "Token usage received: op=%s model=%s total=%s prompt=%s completion=%s",
+            getattr(usage, "operation", None),
+            getattr(usage, "model", None),
+            getattr(usage, "tokens_used", None),
+            getattr(usage, "prompt_tokens", None),
+            getattr(usage, "completion_tokens", None),
+        )
         try:
             tokens = int(getattr(usage, "tokens_used", 0))
         except Exception:
@@ -534,8 +587,7 @@ class MainWindow(QMainWindow):
             self._session_analysis_completion += completion
             self._session_analysis_model = getattr(usage, "model", None)
         self._token_status.setText(
-            f"Embedding ({self._session_embedding_model or '-'}) "
-            f"{self._session_embedding_prompt} tokens "
+            f"Embedding ({self._session_embedding_model or '-'}) {self._session_embedding_prompt} tokens "
             f"| AI Analysis ({self._session_analysis_model or '-'}) "
             f"{self._session_analysis_prompt} prompt / {self._session_analysis_completion} completion tokens"
         )
@@ -644,6 +696,15 @@ class _AIAnalyzeRunnable(QRunnable):
     def run(self) -> None:
         try:
             result, usage = self._service.analyze_chunks(self._query, self._matches, self._top_n)
+            print(
+                "[AIAnalyzeRunnable] emitting usage",
+                "op=", getattr(usage, "operation", None),
+                "model=", getattr(usage, "model", None),
+                "total=", getattr(usage, "tokens_used", None),
+                "prompt=", getattr(usage, "prompt_tokens", None),
+                "completion=", getattr(usage, "completion_tokens", None),
+                flush=True,
+            )
             self.signals.result.emit(result)
             self.signals.usage.emit(usage)
         except (AIServiceError, UnauthorizedAIServiceError) as error:
