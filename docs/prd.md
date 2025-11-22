@@ -22,6 +22,7 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | :--- | :--- | :--- | :--- |
 | 2025-11-18 | 1.0 | Initial draft based on Project Brief and preliminary PRD. | John (PM) |
 | 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |
+| 2025-11-22 | 1.2 | Added Epics 7, 8, and 9 for post-MVP UX and AI enhancements. | John (PM) |
 
 ## 2. Requirements
 
@@ -138,6 +139,9 @@ Testing will include both unit tests for individual components and integration t
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
 *   **Epic 5: Application Hardening & User Experience:** Focus on robust error handling, secure API key management, comprehensive settings, and packaging for cross-platform deployment, ensuring the application is reliable, secure, and user-friendly for release.
 *   **Epic 6: UI/UX Enhancements & Usability Polish:** Implement significant UI/UX improvements based on user feedback, including a tab-based interface, indexing cancellation, improved data visibility, and enhanced result readability.
+*   **Epic 7: Enhanced AI Configuration & Chat Experience:** Enable flexible AI provider configuration and transform AI Analysis into an interactive chat interface with user-controlled retrieval.
+*   **Epic 8: Indexing & Search UX Improvements:** Improve visibility of indexing status and optimize post-indexing workflow by adding real-time status tracking, indexing summaries, and better default navigation.
+*   **Epic 9: Search Tab Action Reorganization:** Improve Search tab button layout and labeling clarity by moving action buttons to the bottom and renaming the ChatGPT export button.
 
 ## 5.1. Out of Scope for MVP
 
@@ -624,3 +628,163 @@ so that **I can manage my budget and trust the application's usage of the API**.
 4.  6.6.4: The widget provides a breakdown of API calls by type (e.g., "Embedding Calls", "AI Analysis Calls").
 5.  6.6.5: A persistent counter in the main window's status bar shows the running total estimated cost for the session.
 6.  6.6.6: A clear disclaimer is included, stating that costs are estimates.
+
+### Epic 7: Enhanced AI Configuration & Chat Experience
+
+#### Expanded Goal:
+Enable flexible AI provider configuration and transform AI Analysis into an interactive chat interface with user-controlled retrieval.
+
+#### Story 7.1: Split API Configuration for Embedding vs Chat Models
+
+As a **researcher**,
+I want to **configure separate AI providers for embedding generation and chat analysis**,
+so that **I can optimize my costs and use the best model for each purpose**.
+
+##### Acceptance Criteria
+
+1.  7.1.1: Settings include separate fields for embedding and chat configurations.
+2.  7.1.2: Settings UI shows two distinct configuration sections.
+3.  7.1.3: On first launch, existing settings are copied to both new configurations.
+4.  7.1.4: `EmbeddingClient` uses `embedding_*` settings; `AIService` uses `chat_*` settings.
+5.  7.1.5: Both configurations are validated before saving.
+
+#### Story 7.2: Move Analyze Button to AI Analysis Tab
+
+As a **user**,
+I want the **Analyze button to be located in the AI Analysis tab**,
+so that **the interface is more intuitive**.
+
+##### Acceptance Criteria
+
+1.  7.2.1: "Analyze" button is removed from the Search tab.
+2.  7.2.2: "Analyze Selected Papers" button is added to the AI Analysis tab.
+3.  7.2.3: Button is disabled when no search results are available.
+4.  7.2.4: Button triggers the same analysis workflow as before.
+
+#### Story 7.3: Remove Duplicate Token Usage from AI Analysis Tab
+
+As a **user**,
+I want to **see token usage information only in the status bar**,
+so that **the interface is cleaner**.
+
+##### Acceptance Criteria
+
+1.  7.3.1: Token usage widget is removed from the AI Analysis tab.
+2.  7.3.2: Status bar token usage display continues to work correctly.
+3.  7.3.3: All token tracking functionality remains intact.
+
+#### Story 7.4: Convert AI Analysis to Chat Interface
+
+As a **researcher**,
+I want to **interact with AI through a chat interface**,
+so that **I can have a natural, iterative conversation about my research**.
+
+##### Acceptance Criteria
+
+1.  7.4.1: A scrollable chat message area replaces the single text output.
+2.  7.4.2: User and AI messages have distinct visual styling.
+3.  7.4.3: A text input field and "Send" button are at the bottom of the tab.
+4.  7.4.4: Clicking "Analyze Selected Papers" starts a new chat session.
+5.  7.4.5: A loading indicator is shown while the AI is responding.
+
+#### Story 7.5: Implement Chat Message Handling & API Integration
+
+As a **user**,
+I want my **chat messages to be processed by AI with conversation context**,
+so that **I can have meaningful back-and-forth discussions**.
+
+##### Acceptance Criteria
+
+1.  7.5.1: User input is captured, displayed in the chat, and the input field is cleared.
+2.  7.5.2: Previous messages are included in the API request for context.
+3.  7.5.3: `AIService` is called with the user message and conversation history.
+4.  7.5.4: AI responses are displayed in the chat.
+5.  7.5.5: Token usage is recorded for each chat exchange.
+
+#### Story 7.6: Add Retrieval Toggle & Chunk Count Control
+
+As a **researcher**,
+I want to **control whether AI retrieves paper context and how many chunks to include**,
+so that **I can balance between detailed context and focused questions**.
+
+##### Acceptance Criteria
+
+1.  7.6.1: A checkbox to "Include search context" and a spinbox for "Number of chunks" (1-20) are added to the AI Analysis tab.
+2.  7.6.2: When the toggle is ON, retrieved chunks are prepended to the conversation context.
+3.  7.6.3: When the toggle is OFF, only the user's message and history are sent.
+4.  7.6.4: The toggle state and chunk count are not persisted across application restarts (session-only).
+5.  7.6.5: The default state is ON with 5 chunks.
+
+### Epic 8: Indexing & Search UX Improvements
+
+#### Expanded Goal:
+Improve visibility of indexing status and optimize the post-indexing workflow by adding real-time status tracking, indexing summaries, and better default navigation.
+
+#### Story 8.1: Add Indexing Status Column to Paper List
+
+As a **user**,
+I want to **see the indexing status of each paper at a glance**,
+so that **I can quickly identify which papers are indexed or have issues**.
+
+##### Acceptance Criteria
+
+1.  8.1.1: A new "Status" column is added to the paper list in the Index tab.
+2.  8.1.2: The column displays one of four statuses: "Not Indexed", "Indexed", "No PDF", "PDF Error".
+3.  8.1.3: Each status has a distinct icon and color (e.g., ✅ for Indexed).
+4.  8.1.4: The status for each paper is persisted in the local database.
+
+#### Story 8.2: Update Indexing Status in Real-Time
+
+As a **user**,
+I want to **see each paper's status update in real-time as indexing progresses**,
+so that **I can monitor progress and identify problems immediately**.
+
+##### Acceptance Criteria
+
+1.  8.2.1: As the `IndexingService` processes each paper, its status is updated in the UI.
+2.  8.2.2: The UI remains responsive during the indexing process.
+3.  8.2.3: Statuses for "Indexed", "No PDF", and "PDF Error" are correctly assigned.
+4.  8.2.4: Re-indexing a paper correctly updates its status.
+
+#### Story 8.3: Display Indexing Summary After Completion
+
+As a **user**,
+I want to **see a summary of indexing results after completion**,
+so that **I understand what was processed and can quickly identify any issues**.
+
+##### Acceptance Criteria
+
+1.  8.3.1: A summary appears below the "Start Indexing" button after the process completes.
+2.  8.3.2: The summary shows counts for "Indexed", "No PDF", and "Errors".
+3.  8.3.3: The summary persists until the next indexing operation begins.
+4.  8.3.4: The summary is not persisted across application sessions.
+
+#### Story 8.4: Remove Auto-Tab-Switch & Set Default Tab
+
+As a **user**,
+I want to **stay on the Index tab after indexing to review results**, and I want the **app to open to the Search tab by default**.
+
+##### Acceptance Criteria
+
+1.  8.4.1: After indexing completes, the application remains on the Index tab.
+2.  8.4.2: On application launch, the UI defaults to the Search tab.
+3.  8.4.3: Manual tab switching is unaffected.
+
+### Epic 9: Search Tab Action Reorganization
+
+#### Expanded Goal:
+Improve the Search tab's button layout and labeling clarity by moving action buttons to the bottom and renaming the ChatGPT export button for better usability.
+
+#### Story 9.1: Move Action Buttons & Rename Copy Button
+
+As a **user**,
+I want the **action buttons at the bottom of the Search tab with clear labels**,
+so that **the interface is cleaner and I can easily find the actions I need**.
+
+##### Acceptance Criteria
+
+1.  9.1.1: Action buttons ("Open in Zotero", "Open PDF", "Copy as Prompt") are moved to the bottom of the Search tab.
+2.  9.1.2: The "Copy to ChatGPT" button is renamed to "Copy as Prompt".
+3.  9.1.3: The layout is clean with appropriate spacing.
+4.  9.1.4: Button enabled/disabled logic is preserved.
+5.  9.1.5: All button functionality is preserved.

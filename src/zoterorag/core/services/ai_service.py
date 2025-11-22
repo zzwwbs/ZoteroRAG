@@ -55,7 +55,7 @@ class AIService:
     def analyze_chunks(self, query: str, matches: Sequence[SearchMatch], top_n: int = 10) -> tuple[str, TokenUsage]:
         """Send query and top N chunks to LLM and return synthesized answer with citations."""
 
-        api_key = self._settings_manager.get_api_key()
+        api_key = self._settings_manager.get_chat_api_key()
         if not api_key:
             raise UnauthorizedAIServiceError("API key is not configured.")
 

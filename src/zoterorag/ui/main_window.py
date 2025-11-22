@@ -77,12 +77,12 @@ class MainWindow(QMainWindow):
         self._vector_manager = VectorDBManager(dimension=1536)
         self._embedding_client = EmbeddingClient(
             self._settings_manager,
-            base_url=initial_settings.api_base_url,
+            base_url=initial_settings.embedding_base_url,
             model=initial_settings.embedding_model,
         )
         self._ai_service = AIService(
             self._settings_manager,
-            base_url=initial_settings.api_base_url,
+            base_url=initial_settings.chat_base_url,
             model=initial_settings.chat_model,
             metadata_manager=self._metadata_manager,
         )
@@ -477,17 +477,23 @@ class MainWindow(QMainWindow):
             self._load_state_from_settings()
             self.settings_tab.refresh()
 
-    def _validate_api_key(self, api_key: str) -> None:
-        """Lightweight embedding request to validate API key."""
+    def _validate_api_key(self, api_key: str, *, base_url: str, model: str) -> None:
+        """Lightweight embedding request to validate API key with provided base/model."""
 
         class _TransientSettings:
-            def __init__(self, key: str) -> None:
+            def __init__(self, key: str, base: str, model_name: str) -> None:
                 self._key = key
+                self.embedding_base_url = base
+                self.embedding_model = model_name
 
-            def get_api_key(self) -> str | None:  # pragma: no cover - trivial
+            def get_embedding_api_key(self) -> str | None:  # pragma: no cover - trivial
                 return self._key
 
-        client = EmbeddingClient(_TransientSettings(api_key))
+        client = EmbeddingClient(
+            _TransientSettings(api_key, base_url, model),
+            base_url=base_url,
+            model=model,
+        )
         # Small payload to verify credentials.
         client.get_embedding("ping")
 
@@ -497,7 +503,7 @@ class MainWindow(QMainWindow):
         if not self._search_service_provided:
             self._embedding_client = EmbeddingClient(
                 self._settings_manager,
-                base_url=settings.api_base_url,
+                base_url=settings.embedding_base_url,
                 model=settings.embedding_model,
             )
             self._search_service = SearchService(
@@ -507,7 +513,7 @@ class MainWindow(QMainWindow):
             )
             self._ai_service = AIService(
                 self._settings_manager,
-                base_url=settings.api_base_url,
+                base_url=settings.chat_base_url,
                 model=settings.chat_model,
                 metadata_manager=self._metadata_manager,
             )
@@ -537,7 +543,7 @@ class MainWindow(QMainWindow):
 
     def _update_analysis_controls(self) -> None:
         """Update visibility and enabled state of AI analysis controls."""
-        can_analyze = bool(self._settings_manager.get_api_key()) and self._state.enable_ai_analysis
+        can_analyze = bool(self._settings_manager.get_chat_api_key()) and self._state.enable_ai_analysis
         has_results = bool(self._state.search_matches)
         busy = bool(self._analyze_button.property("busy"))
         enabled = can_analyze and has_results and not busy

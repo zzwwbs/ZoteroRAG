@@ -14,6 +14,7 @@ N/A - This is a greenfield project. The architecture will be designed from the g
 
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
+| 2025-11-22 | 0.3 | Updated architecture for Epics 7, 8, and 9. Introduces chat-based AI, enhanced indexing UX, and reorganized search UI. | Winston (Architect) |
 | 2025-11-22 | 0.2 | Updated architecture to align with PRD v1.1, incorporating major UI/UX enhancements including a tabbed interface, indexing cancellation, and improved results display. | Winston (Architect) |
 | 2025-11-19 | 0.1 | Initial draft based on PRD v1.0. | Winston (Architect) |
 
@@ -137,6 +138,7 @@ graph TD
 *   `year`: `int` - The publication year.
 *   `pdf_file_path`: `str` - The absolute file path to the PDF.
 *   `indexed_at`: `datetime` - The timestamp of when the document was last indexed.
+*   `indexing_status`: `str` - The current indexing status ('not_indexed', 'indexed', 'no_pdf', 'pdf_error').
 
 #### Python Dataclass
 ```python
@@ -152,6 +154,7 @@ class Document:
     year: int
     pdf_file_path: str
     indexed_at: datetime
+    indexing_status: str
 ```
 
 #### Relationships
@@ -432,15 +435,15 @@ paths:
 ### Component List
 
 ### ZoteroRAG Desk Application (Main UI)
-**Responsibility:** Provides the main graphical user interface organized into a task-oriented tabbed layout (Epic 6, Story 6.1). Manages the application lifecycle, orchestrates interactions between core services and UI components, handles background task execution, and maintains application state.
+**Responsibility:** Provides the main graphical user interface organized into a task-oriented tabbed layout. Manages the application lifecycle, orchestrates interactions between core services and UI components, handles background task execution, and maintains application state, including the new interactive chat history (Epic 7.4). It defaults to the Search tab on launch and no longer auto-switches tabs after indexing (Epic 8.4).
 **Key Interfaces:**
-- `__init__()`: Initializes the main window with `QTabWidget` containing Search, Index, AI Analysis, and Settings tabs
-- `switch_to_tab(tab_name: str)`: Programmatically switches between tabs (e.g., auto-switch to Search after indexing)
+- `__init__()`: Initializes the main window with `QTabWidget`, setting "Search" as the default tab (Epic 8.4)
+- `switch_to_tab(tab_name: str)`: Programmatically switches between tabs
 - `launch_chunk_detail_dialog(chunk: Chunk, all_chunks: list[Chunk])`: Opens non-modal chunk detail dialog
-- `update_token_usage(usage: TokenUsage)`: Updates token usage display in status bar and AI Analysis tab
+- `update_token_usage(usage: TokenUsage)`: Updates token usage display in status bar
 - Manages `QStackedWidget` for onboarding vs. main tabbed interface
 - Handles user input (search queries, button clicks) from all tabs via signal/slot connections
-- Displays search results, indexing progress, and application status across tabs
+- Displays search results, indexing progress/status, and application status across tabs
 - Manages settings dialog and application preferences
 **Dependencies:** `ZoteroManager`, `IndexingService`, `SearchService`, `AIService`, `SettingsManager`, `ChunkDetailDialog`, `TokenUsageWidget`.
 **Technology Stack:** PySide6.
@@ -458,15 +461,13 @@ paths:
 **Technology Stack:** PySide6.
 
 ### TokenUsageWidget
-**Responsibility:** Displays API token consumption and estimated costs for the current session (Epic 6, Story 6.6), providing transparency to users about their API usage and enabling informed budget management.
+**Responsibility:** A non-visual component or controller that tracks API token consumption and estimated costs for the current session (Epic 6.6). It provides data to be displayed in the main window's status bar, ensuring users have persistent visibility of their API usage and costs without cluttering a specific tab (Epic 7.3).
 **Key Interfaces:**
-- `update_usage(usage: TokenUsage)`: Adds a new token usage record and updates all displays
+- `update_usage(usage: TokenUsage)`: Adds a new token usage record and updates session totals
 - `get_session_totals() -> dict`: Returns aggregated statistics (total tokens, total cost, call counts)
-- `show_detailed_history()`: Opens a dialog with detailed breakdown of all API calls
-- `reset_session_tracking()`: Clears session usage data (e.g., on new indexing operation)
-- Displays: Total tokens consumed, estimated cost (color-coded), breakdown by operation type (embedding/analysis), number of API calls
-**Dependencies:** None (receives `TokenUsage` data from Main UI).
-**Technology Stack:** PySide6.
+- `reset_session_tracking()`: Clears session usage data
+- Emits signals to the `MainWindow` to update the status bar display
+**Dependencies:** None (receives `TokenUsage` data from `MainWindow`).
 
 ### ZoteroManager
 **Responsibility:** Manages all read-only interactions with the user's Zotero database (`zotero.sqlite`) and associated PDF files. This includes detecting the Zotero directory, reading item and collection metadata with paper counts (Epic 6, Story 6.3), and locating PDF paths.
@@ -483,16 +484,15 @@ paths:
 **Technology Stack:** Python, PyMuPDF.
 
 ### IndexingService
-**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, and safe cancellation (Epic 6, Story 6.2).
+**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, safe cancellation (Epic 6.2), and provides real-time status updates per paper (Epic 8.2). After completion, it provides a summary of the indexing job (Epic 8.3).
 **Key Interfaces:**
 - `start_indexing(scope: IndexingScope) -> None`: Begins indexing operation in background thread
 - `cancel_indexing() -> None`: Safely requests cancellation of in-progress indexing; sets cancellation flag (Story 6.2)
 - `is_cancellation_requested() -> bool`: Checks if cancellation has been requested
 - `update_index() -> None`: Performs incremental indexing for new/modified documents
 - `get_indexing_progress() -> IndexingProgress`: Returns current progress (processed count, total count, percentage)
-- Emits signals for progress updates and completion/cancellation events
+- Emits signals for progress updates, per-paper status changes (Epic 8.2), and a final summary upon completion/cancellation (Epic 8.3)
 **Dependencies:** `ZoteroManager`, `ChunkingUtility`, `EmbeddingClient`, `VectorDBManager`, `MetadataDBManager`.
-**Technology Stack:** Python.
 
 ### ChunkingUtility
 **Responsibility:** Breaks down raw text content from PDFs into smaller, overlapping text segments (chunks) suitable for generating meaningful embeddings.
@@ -522,10 +522,11 @@ paths:
 **Technology Stack:** Python, FAISS.
 
 ### MetadataDBManager
-**Responsibility:** Manages the local SQLite database for storing all application-specific metadata, including `Document`, `Chunk`, `Collection`, and `DocumentCollection` records. Provides CRUD operations for these models.
+**Responsibility:** Manages the local SQLite database for storing all application-specific metadata, including `Document`, `Chunk`, `Collection`, and `DocumentCollection` records. Provides CRUD operations for these models and is responsible for updating the `indexing_status` of documents during the indexing process (Epic 8.1).
 **Key Interfaces:**
 - `save_document(document: Document) -> None`
 - `get_document(id: int) -> Document`
+- `update_document_status(document_id: int, status: str) -> None`: Updates the indexing status for a given document (Epic 8.1).
 - `save_chunk(chunk: Chunk) -> None`
 - `get_chunk(id: int) -> Chunk`
 - `save_collection(collection: Collection) -> None`
@@ -534,7 +535,6 @@ paths:
 - `get_chunks_by_document_id(document_id: int) -> list[Chunk]`
 - `get_documents_by_collection_id(collection_id: int) -> list[Document]`
 **Dependencies:** `sqlite3`.
-**Technology Stack:** Python.
 
 ### SearchService
 **Responsibility:** Processes natural language search queries. This involves generating an embedding for the query, performing a vector similarity search, retrieving associated chunk and document metadata, and formatting the results for display.
@@ -544,22 +544,22 @@ paths:
 **Technology Stack:** Python.
 
 ### AIService
-**Responsibility:** Handles communication with the external OpenAI-compatible API for AI analysis and synthesis of search results. Manages API requests, authentication, error handling, and tracks token usage for transparency (Epic 6, Story 6.6).
+**Responsibility:** Handles communication with the external OpenAI-compatible API for the interactive AI chat analysis (Epic 7.4). It constructs prompts that include conversation history and, optionally, retrieved search result chunks to provide context to the LLM (Epic 7.6). Manages API requests, authentication, error handling, and tracks token usage.
 **Key Interfaces:**
-- `analyze_chunks(query: str, chunks: list[Chunk]) -> tuple[str, TokenUsage]`: Returns analysis text and token usage record
-- `_calculate_cost(tokens: int, model: str) -> float`: Calculates estimated cost based on current pricing
+- `get_chat_response(messages: list[dict], include_context: bool, context_chunks: list[Chunk]) -> tuple[str, TokenUsage]`: Sends the conversation history (and optional context) to the chat model and returns the AI's response and token usage.
+- `_calculate_cost(tokens: int, model: str) -> float`: Calculates estimated cost based on current pricing.
 **Dependencies:** `SettingsManager`, `requests`.
-**Technology Stack:** Python.
 
 ### SettingsManager
-**Responsibility:** Manages all application settings and user preferences, including the Zotero data directory path, external API keys, and other configurable options. Ensures secure storage of sensitive data like API keys.
+**Responsibility:** Manages all application settings and user preferences, including the Zotero data directory path, external API keys for both embedding and chat services (Epic 7.1), and other configurable options. Ensures secure storage of sensitive data like API keys.
 **Key Interfaces:**
 - `load_settings() -> AppSettings`
 - `save_settings(settings: AppSettings) -> None`
-- `get_api_key() -> str`
-- `set_api_key_securely(key: str) -> None`
+- `get_embedding_api_key() -> str`
+- `set_embedding_api_key_securely(key: str) -> None`
+- `get_chat_api_key() -> str`
+- `set_chat_api_key_securely(key: str) -> None`
 **Dependencies:** OS-specific credential management (e.g., `keyring` library), local file I/O for general settings.
-**Technology Stack:** Python.
 
 ### Component Diagrams
 
@@ -704,7 +704,8 @@ CREATE TABLE IF NOT EXISTS documents (
     authors TEXT, -- Stored as JSON string (e.g., '["Author One", "Author Two"]')
     year INTEGER,
     pdf_file_path TEXT NOT NULL,
-    indexed_at TEXT NOT NULL -- ISO 8601 format (YYYY-MM-DD HH:MM:SS.SSS)
+    indexed_at TEXT NOT NULL, -- ISO 8601 format (YYYY-MM-DD HH:MM:SS.SSS)
+    indexing_status TEXT NOT NULL DEFAULT 'not_indexed' -- ('not_indexed', 'indexed', 'no_pdf', 'pdf_error')
 );
 
 -- Index for efficient lookup by Zotero item key
@@ -769,23 +770,22 @@ src/
 └── ui/
     ├── __init__.py
     ├── main_window.py          # Main application window with QTabWidget (Epic 6.1)
-    ├── search_tab.py           # "Search" tab with search controls and results (Epic 6.5)
-    ├── index_tab.py            # "Index" tab with library and indexing controls (Epic 6.2, 6.3)
-    ├── analysis_tab.py         # "AI Analysis" tab with results and token widget (Epic 6.6)
-    ├── settings_tab.py         # "Settings" tab for app configuration
+    ├── search_tab.py           # "Search" tab with controls, results, and bottom action buttons (Epic 9.1)
+    ├── index_tab.py            # "Index" tab with library, indexing controls, status column, and summary (Epic 8)
+    ├── analysis_tab.py         # "AI Analysis" tab, now an interactive chat interface (Epic 7)
+    ├── settings_tab.py         # "Settings" tab for app configuration (including split API configs, Epic 7.1)
     ├── chunk_detail_dialog.py  # Non-modal dialog for full chunk viewing (Epic 6.4)
     ├── onboarding_view.py      # Initial setup/welcome screen
     └── widgets/                # Reusable custom widgets
         ├── __init__.py
-        ├── token_usage_widget.py # API token usage display widget (Epic 6.6)
-        └── ...
+        └── ...                 # TokenUsageWidget is now a controller, not a visible widget
 ```
 
 #### Component Template
 Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to the `MainWindow` controller.
 
 ```python
-# Example: src/ui/search_tab.py (Epic 6.5 - Repositioned chunk count selector)
+# Example: src/ui/search_tab.py (Epic 9.1 - Reorganized actions)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, 
     QPushButton, QSpinBox, QLabel, QListWidget
@@ -797,6 +797,10 @@ class SearchTab(QWidget):
     search_triggered = Signal(str, int)
     # Signal emitted when user double-clicks a chunk (Epic 6.4)
     chunk_detail_requested = Signal(object, int, int)  # chunk, index, total
+    # Signals for bottom action buttons (Epic 9.1)
+    open_in_zotero_requested = Signal()
+    open_pdf_requested = Signal()
+    copy_as_prompt_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -829,13 +833,27 @@ class SearchTab(QWidget):
         self.paper_list = QListWidget()
         self.layout.addWidget(self.paper_list)
         
-        self.layout.addWidget(QLabel("Chunks (double-click for full text):"))  # Epic 6.4
+        self.layout.addWidget(QLabel("Chunks (double-click for full text):"))
         self.chunk_list = QListWidget()
         self.layout.addWidget(self.chunk_list)
 
+        # Bottom action buttons (Epic 9.1)
+        action_buttons_layout = QHBoxLayout()
+        self.open_zotero_button = QPushButton("Open in Zotero")
+        self.open_pdf_button = QPushButton("Open PDF")
+        self.copy_prompt_button = QPushButton("Copy as Prompt") # Renamed from "Copy to ChatGPT"
+        
+        action_buttons_layout.addStretch() # Align buttons to the right
+        action_buttons_layout.addWidget(self.open_zotero_button)
+        action_buttons_layout.addWidget(self.open_pdf_button)
+        action_buttons_layout.addWidget(self.copy_prompt_button)
+        self.layout.addLayout(action_buttons_layout)
+
         # Connect signals
         self.search_button.clicked.connect(self._on_search)
-        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_clicked)  # Epic 6.4
+        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_clicked)
+        self.copy_prompt_button.clicked.connect(self.copy_as_prompt_requested)
+        # ... connect other action button signals ...
 
     def _on_search(self):
         query = self.search_bar.text()
@@ -844,10 +862,9 @@ class SearchTab(QWidget):
             self.search_triggered.emit(query, count)
     
     def _on_chunk_double_clicked(self, item):
-        # Epic 6.4 - Open chunk detail dialog
         chunk_index = self.chunk_list.row(item)
         total_chunks = self.chunk_list.count()
-        chunk_data = item.data(Qt.UserRole)  # Assume chunk stored in item data
+        chunk_data = item.data(Qt.UserRole)
         self.chunk_detail_requested.emit(chunk_data, chunk_index, total_chunks)
 
 ```
@@ -872,8 +889,9 @@ class AppState:
     indexing_progress: float = 0.0
     search_results: List[dict] = field(default_factory=list)
     selected_paper: Optional[dict] = None
-    token_usage_history: List[TokenUsage] = field(default_factory=list)  # Epic 6.6
-    current_session_cost: float = 0.0  # Epic 6.6
+    token_usage_history: List[TokenUsage] = field(default_factory=list)
+    current_session_cost: float = 0.0
+    chat_history: List[dict] = field(default_factory=list) # Epic 7.4 - For chat interface
     # ... other state variables
 
 # Example: src/config/models.py
@@ -883,9 +901,12 @@ class AppSettings:
     # Paths
     zotero_data_path: Optional[str] = None
     
-    # API Configuration
-    api_base_url: str = "https://api.openai.com/v1"
+    # Embedding API Configuration (Epic 7.1)
+    embedding_api_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-ada-002"
+    
+    # Chat API Configuration (Epic 7.1)
+    chat_api_base_url: str = "https://api.openai.com/v1"
     chat_model: str = "gpt-4"
     
     # Chunking Configuration
@@ -901,7 +922,7 @@ class AppSettings:
     # UI Preferences
     theme: str = "light"  # light, dark, auto
     
-    # Note: API key is stored separately in OS keychain via keyring
+    # Note: API keys are stored separately in OS keychain via keyring
 ```
 
 #### State Management Patterns
@@ -962,10 +983,15 @@ class MainWindow(QMainWindow):
             self.stacked_widget.setCurrentWidget(self.onboarding_view)
         else:
             self.stacked_widget.setCurrentWidget(self.main_tabs)
+            # Default to the Search tab on launch (Epic 8.4)
+            self.main_tabs.setCurrentWidget(self.search_tab)
+            
             # Disable search tab until indexing is complete
             if not self.is_indexing_complete(): # is_indexing_complete is a placeholder
-                self.main_tabs.setCurrentWidget(self.index_tab)
                 self.search_tab.setEnabled(False)
+                # Optionally, switch to Index tab if no index exists, but don't auto-switch after indexing
+                if not self.search_tab.isEnabled():
+                    self.main_tabs.setCurrentWidget(self.index_tab)
 
 ```
 
@@ -1244,16 +1270,16 @@ zotero-rag-desk/
 │   │   ├── ui/                 # "Frontend" - PySide6 UI components
 │   │   │   ├── __init__.py
 │   │   │   ├── main_window.py          # Main window with QTabWidget (Epic 6.1)
-│   │   │   ├── search_tab.py           # "Search" tab (Epic 6.5 - grouped controls)
-│   │   │   ├── index_tab.py            # "Index" tab (Epic 6.2, 6.3 - cancel, counts)
-│   │   │   ├── analysis_tab.py         # "AI Analysis" tab (Epic 6.6 - token widget)
+│   │   │   ├── search_tab.py           # "Search" tab with reorganized controls (Epic 9.1)
+│   │   │   ├── index_tab.py            # "Index" tab with status column and summary (Epic 8)
+│   │   │   ├── analysis_tab.py         # "AI Analysis" tab, now an interactive chat interface (Epic 7)
 │   │   │   ├── settings_tab.py         # "Settings" tab
 │   │   │   ├── chunk_detail_dialog.py  # Non-modal chunk viewer (Epic 6.4)
 │   │   │   ├── onboarding_view.py      # Initial setup screen
 │   │   │   ├── assets/                 # UI assets like icons, images, etc.
-│   │   │   └── widgets/                # Reusable custom widgets
+│   │   │   └── widgets/                # Reusable custom widgets (TokenUsage is now a controller)
 │   │   │       ├── __init__.py
-│   │   │       └── token_usage_widget.py  # API usage display (Epic 6.6)
+│   │   │       └── ...
 │   │   │
 │   │   └── config/             # Application configuration and settings management
 │   │       ├── __init__.py
@@ -1344,7 +1370,7 @@ Environment variables are primarily used for development-time flags or sensitive
 
 ### Search and AI Analysis Workflow
 
-This workflow describes how a user performs a search and optionally uses the AI analysis feature.
+This workflow describes how a user performs a search and then engages in an interactive chat session for AI analysis.
 
 ```mermaid
 sequenceDiagram
@@ -1363,48 +1389,30 @@ sequenceDiagram
     activate SS
 
     SS->>EC: get_embedding(query)
-    activate EC
-    EC->>OAI: POST /v1/embeddings (query)
-    activate OAI
-    OAI-->>EC: Returns query_vector
-    deactivate OAI
-    EC-->>SS: Returns query_vector
-    deactivate EC
-
     SS->>VDM: search_vectors(query_vector, k=50)
-    activate VDM
-    VDM-->>SS: Returns list of vector_ids
-    deactivate VDM
-
     SS->>MDM: get_chunks_by_vector_ids(vector_ids)
-    activate MDM
-    MDM-->>SS: Returns list of Chunk objects
-    deactivate MDM
-
     SS->>MDM: get_documents_for_chunks(chunks)
-    activate MDM
-    MDM-->>SS: Returns enriched Document info
-    deactivate MDM
-
     SS-->>UI: Returns formatted search results
     deactivate SS
 
     UI->>UI: Re-enables UI, displays results in Papers/Chunks view
-    User->>UI: Reviews results
+    User->>UI: Reviews results, switches to AI Analysis Tab
 
-    alt Optional: User clicks "Analyze with AI"
-        UI->>AIS: analyze_chunks(query, top_chunks)
+    loop Interactive Chat Session (Epic 7)
+        User->>UI: Enters chat message
+        UI->>UI: Displays user message in chat history
+        UI->>AIS: get_chat_response(history, include_context, top_chunks)
         activate AIS
 
-        AIS->>OAI: POST /v1/chat/completions (prompt with query + chunks)
+        AIS->>OAI: POST /v1/chat/completions (prompt with history + optional context)
         activate OAI
         OAI-->>AIS: Returns synthesized answer
         deactivate OAI
 
-        AIS-->>UI: Returns synthesized answer
+        AIS-->>UI: Returns synthesized answer and token usage
         deactivate AIS
 
-        UI->>User: Displays AI-generated summary with citations
+        UI->>UI: Displays AI response in chat history
     end
 ```
 

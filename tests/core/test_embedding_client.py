@@ -16,7 +16,7 @@ class DummySettings:
     def __init__(self, api_key: str | None) -> None:
         self._api_key = api_key
 
-    def get_api_key(self) -> str | None:  # pragma: no cover - trivial accessor
+    def get_embedding_api_key(self) -> str | None:  # pragma: no cover - trivial accessor
         return self._api_key
 
 
@@ -43,6 +43,7 @@ def test_get_embedding_success_returns_vector():
     payload = {"data": [{"embedding": [0.1, 0.2, 0.3]}]}
 
     def responder(url, json, headers, timeout):
+        assert url == "https://api.openai.com/v1/embeddings"
         return FakeResponse(True, json_data=payload)
 
     client = EmbeddingClient(
@@ -63,6 +64,23 @@ def test_missing_api_key_raises():
 
     with pytest.raises(UnauthorizedEmbeddingError):
         client.get_embedding("hello")
+
+
+def test_custom_base_url_used():
+    payload = {"data": [{"embedding": [1, 2, 3]}]}
+
+    def responder(url, json, headers, timeout):
+        assert url == "https://custom.example.com/v1/embeddings"
+        return FakeResponse(True, json_data=payload)
+
+    client = EmbeddingClient(
+        settings_manager=DummySettings("key"),
+        base_url="https://custom.example.com/v1",
+        session_factory=lambda: FakeSession(responder),
+    )
+
+    vector, _ = client.get_embedding("hello")
+    assert vector == [1, 2, 3]
 
 
 def test_rate_limit_error_raises():

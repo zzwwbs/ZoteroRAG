@@ -20,7 +20,7 @@ class DummySettings:
     def __init__(self, key: str | None) -> None:
         self._key = key
 
-    def get_api_key(self) -> str | None:  # pragma: no cover - trivial
+    def get_chat_api_key(self) -> str | None:  # pragma: no cover - trivial
         return self._key
 
 
@@ -95,6 +95,7 @@ def test_analyze_chunks_replaces_placeholders():
     user_content = sent["messages"][1]["content"]
     assert "CHUNK_1" in user_content
     assert "chunk content" in user_content
+    assert session.requests[0]["url"] == "https://example.com/v1/chat/completions"
 
 
 def test_missing_key_raises():

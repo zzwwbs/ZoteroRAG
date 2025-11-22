@@ -22,6 +22,8 @@ class FakeSettingsManager:
         self._settings = AppSettings(
             zotero_data_path=str(zotero_path) if zotero_path else None,
             onboarding_completed=onboarding_completed,
+            embedding_base_url="https://api.example.com/v1",
+            chat_base_url="https://api.example.com/v1",
         )
         self._keyring_service = "test"
 
@@ -43,6 +45,12 @@ class FakeSettingsManager:
         self._settings = settings
 
     def get_api_key(self) -> str | None:
+        return None
+
+    def get_embedding_api_key(self) -> str | None:
+        return None
+
+    def get_chat_api_key(self) -> str | None:
         return None
 
     def set_api_key_securely(self, key: str) -> None:

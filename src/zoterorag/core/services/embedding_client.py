@@ -46,7 +46,7 @@ class EmbeddingClient:
     def get_embedding(self, text: str) -> tuple[list[float], TokenUsage]:
         """Send text to the embeddings endpoint and return the vector plus token usage."""
 
-        api_key = self._settings_manager.get_api_key()
+        api_key = self._settings_manager.get_embedding_api_key()
         if not api_key:
             raise UnauthorizedEmbeddingError("API key is not configured.")
 

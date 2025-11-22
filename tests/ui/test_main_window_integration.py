@@ -31,6 +31,12 @@ class FakeSettings:
         """Return None for testing (no API key configured)."""
         return None
 
+    def get_embedding_api_key(self) -> str | None:
+        return None
+
+    def get_chat_api_key(self) -> str | None:
+        return None
+
 
 class FakeSearchService:
     def __init__(self, should_fail: bool = False) -> None:
