@@ -67,6 +67,14 @@ class MetadataDBManager:
     def _ensure_token_usage_columns(self, connection: sqlite3.Connection) -> None:
         """Add missing token_usage columns for existing installs."""
 
+        # Check if token_usage table exists first
+        table_exists = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='token_usage'"
+        ).fetchone()
+        
+        if not table_exists:
+            return  # Table doesn't exist yet, skip migration
+
         columns = {
             row["name"]: True
             for row in connection.execute("PRAGMA table_info(token_usage)").fetchall()

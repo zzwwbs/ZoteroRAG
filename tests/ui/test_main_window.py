@@ -73,6 +73,12 @@ class FakeZoteroManager:
     def get_collections(self):
         return []
 
+    def get_total_paper_count(self) -> int:
+        return 0
+
+    def get_collection_paper_counts(self) -> dict:
+        return {}
+
 
 @pytest.fixture(scope="module")
 def qapp():
