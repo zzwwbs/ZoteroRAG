@@ -142,7 +142,6 @@ class MainWindow(QMainWindow):
         self.analysis_tab = AnalysisTab()
         self._analysis_label = self.analysis_tab.analysis_label
         self._analysis_loading = self.analysis_tab.loading_label
-        self._token_usage_widget = self.analysis_tab.token_usage_widget
         self._analyze_button = self.analysis_tab.analyze_button
         self._analyze_button.clicked.connect(self._handle_analyze_clicked)
 
@@ -168,7 +167,6 @@ class MainWindow(QMainWindow):
         self._has_search_selection = False
         self.search_tab.selection_changed.connect(self._handle_selection_changed)
         self.token_usage_recorded.connect(self._handle_token_usage)
-        self.token_usage_recorded.connect(self._token_usage_widget.update_usage)
         if auto_start:
             self._determine_initial_view()
         self._load_state_from_settings()
@@ -371,7 +369,6 @@ class MainWindow(QMainWindow):
         worker.signals.error.connect(self._handle_analysis_error)
         worker.signals.finished.connect(self._handle_analysis_finished)
         worker.signals.usage.connect(self._handle_token_usage)
-        worker.signals.usage.connect(self._token_usage_widget.update_usage)
         self._set_analysis_busy(True)
         self._analysis_loading.setVisible(True)
         self._analysis_loading.setText("Analyzing with AI...")

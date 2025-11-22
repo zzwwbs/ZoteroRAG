@@ -5,8 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-from .token_usage_widget import TokenUsageWidget
-
 class AnalysisTab(QWidget):
     """Holds placeholders for AI-generated analysis and token usage data."""
 
@@ -27,11 +25,8 @@ class AnalysisTab(QWidget):
             self.analysis_label.textInteractionFlags() | Qt.TextSelectableByMouse
         )
 
-        self.token_usage_widget = TokenUsageWidget()
-
         layout = QVBoxLayout(self)
         layout.addWidget(self.analyze_button)
         layout.addWidget(self.loading_label)
         layout.addWidget(self.analysis_label)
-        layout.addWidget(self.token_usage_widget)
         layout.addStretch()

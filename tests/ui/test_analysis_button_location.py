@@ -73,6 +73,8 @@ def test_analysis_tab_shows_analyze_button(qapp):
     tab = AnalysisTab()
     assert tab.analyze_button.text() == "Analyze Selected Papers"
     assert tab.analyze_button.isEnabled() is False
+    # Token usage widget should be absent
+    assert not hasattr(tab, "token_usage_widget")
 
 
 def test_analyze_button_enables_when_results_present(qapp):
