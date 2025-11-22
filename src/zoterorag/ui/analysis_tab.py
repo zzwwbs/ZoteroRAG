@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 from .token_usage_widget import TokenUsageWidget
 
@@ -12,6 +12,11 @@ class AnalysisTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.analyze_button = QPushButton("Analyze Selected Papers")
+        self.analyze_button.setEnabled(False)
+        self.analyze_button.setProperty("busy", False)
+        self.analyze_button.setToolTip("Run a search and select papers to enable analysis.")
+
         self.loading_label = QLabel()
         self.loading_label.setVisible(False)
 
@@ -25,6 +30,7 @@ class AnalysisTab(QWidget):
         self.token_usage_widget = TokenUsageWidget()
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self.analyze_button)
         layout.addWidget(self.loading_label)
         layout.addWidget(self.analysis_label)
         layout.addWidget(self.token_usage_widget)

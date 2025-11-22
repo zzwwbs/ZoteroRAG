@@ -131,8 +131,6 @@ class MainWindow(QMainWindow):
         self._chunk_list_view = self.search_tab.chunk_list_view
         self._chunk_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
 
-        self._analyze_button = self.search_tab.analyze_button
-        self._analyze_button.clicked.connect(self._handle_analyze_clicked)
         self._chunk_count = self.search_tab.chunk_count
 
         self.index_tab = IndexTab()
@@ -145,6 +143,8 @@ class MainWindow(QMainWindow):
         self._analysis_label = self.analysis_tab.analysis_label
         self._analysis_loading = self.analysis_tab.loading_label
         self._token_usage_widget = self.analysis_tab.token_usage_widget
+        self._analyze_button = self.analysis_tab.analyze_button
+        self._analyze_button.clicked.connect(self._handle_analyze_clicked)
 
         self.settings_tab = SettingsTab(self._settings_manager, self._open_settings_dialog)
 
@@ -165,6 +165,8 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._main_container)
 
         self._setup_menu_bar()
+        self._has_search_selection = False
+        self.search_tab.selection_changed.connect(self._handle_selection_changed)
         self.token_usage_recorded.connect(self._handle_token_usage)
         self.token_usage_recorded.connect(self._token_usage_widget.update_usage)
         if auto_start:
@@ -334,6 +336,7 @@ class MainWindow(QMainWindow):
         self._state.search_matches = result.matches or []
         self._state.selected_paper = None
         self._state.current_query = result.query
+        self._has_search_selection = False
         self._refresh_results_views()
         match_count = len(self._state.search_matches)
         self._search_view.set_status(
@@ -442,12 +445,15 @@ class MainWindow(QMainWindow):
         if document is None:
             return
         self._state.selected_paper = document
+        self._has_search_selection = True
+        self._update_analysis_controls()
         self._chunk_list_view.update_chunks(
             self._state.search_matches, selected_document_id=document.id
         )
 
     def _clear_selection(self) -> None:
         self._state.selected_paper = None
+        self._has_search_selection = False
         self._chunk_list_view.update_chunks(self._state.search_matches, None)
         self._update_analysis_controls()
 
@@ -527,6 +533,10 @@ class MainWindow(QMainWindow):
         self._state.enable_ai_analysis = settings.enable_ai_analysis
         self._update_analysis_controls()
 
+    def _handle_selection_changed(self, has_selection: bool) -> None:
+        self._has_search_selection = bool(has_selection)
+        self._update_analysis_controls()
+
     def _set_search_tab_enabled(self, enabled: bool) -> None:
         """Toggle Search tab availability."""
         if self._search_tab_index >= 0:
@@ -547,15 +557,27 @@ class MainWindow(QMainWindow):
         has_results = bool(self._state.search_matches)
         busy = bool(self._analyze_button.property("busy"))
         enabled = can_analyze and has_results and not busy
-        self._analyze_button.setVisible(can_analyze)
+        self._analyze_button.setVisible(True)
         self._analysis_loading.setVisible(busy)
         self._analyze_button.setEnabled(enabled)
         self._chunk_count.setEnabled(not busy)
+
         if not can_analyze:
+            tooltip = "Configure AI analysis and API keys in Settings to enable analysis."
             self._analysis_label.setText("")
             self._analysis_loading.setText("AI analysis unavailable; configure settings.")
-        else:
+        elif not has_results:
+            tooltip = "Run a search to enable analysis."
             self._analysis_loading.setText("")
+        elif busy:
+            tooltip = "Analysis in progress."
+        else:
+            tooltip = "Analyze selected papers with AI."
+            if not self._has_search_selection:
+                tooltip = "Select a paper to focus analysis, or analyze current results."
+            self._analysis_loading.setText("")
+
+        self._analyze_button.setToolTip(tooltip)
 
     def _handle_token_usage(self, usage) -> None:
         """Update status bar and session totals when token usage is recorded."""
