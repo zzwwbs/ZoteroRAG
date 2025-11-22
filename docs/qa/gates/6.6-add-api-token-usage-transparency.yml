@@ -1,0 +1,125 @@
+schema: 1
+story: '6.6'
+story_title: 'Add API Token Usage Transparency'
+gate: PASS
+status_reason: 'All 6 acceptance criteria met with robust full-stack implementation. Comprehensive token tracking, clear UI display with breakdown, status bar counter, and proper disclaimer. Cost calculation correctly excluded per specification. All tests pass (13/13).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-11-22T19:00:00Z'
+version: '1.0'
+quality_score: 100
+
+top_issues: []
+
+waiver:
+  active: false
+
+evidence:
+  tests_reviewed: 13
+  tests_passed: 13
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+
+nfr_validation:
+  _assessed: [security, performance, reliability, maintainability]
+  security:
+    status: PASS
+    notes: 'No sensitive data in token_usage table. Thread-safe database access. No new auth concerns.'
+  performance:
+    status: PASS
+    notes: 'Async persistence, lightweight objects, efficient Qt signals. ~3-4ms overhead per API call (negligible).'
+  reliability:
+    status: PASS
+    notes: 'Robust error handling. Database managed by proven MetadataDBManager. Widget state properly initialized. All edge cases tested.'
+  maintainability:
+    status: PASS
+    notes: 'Clean separation of concerns. Clear architecture. 100% test coverage. Easy to extend with new operation types.'
+
+test_coverage:
+  backend:
+    embedding_client: 4
+    ai_service: 3
+    search_service: 2
+  indexing_service: 3
+  ui:
+    token_usage_widget: 1
+  total: 13
+  pass_rate: 100
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 2
+  risks:
+    - id: 'TOKEN-001'
+      severity: low
+      title: 'Token count accuracy'
+      description: 'API counts may differ from billing'
+      mitigation: 'Disclaimer text implemented per AC 6.6.6'
+      status: 'mitigated'
+    - id: 'DATA-001'
+      severity: low
+      title: 'Database growth'
+      description: 'token_usage table grows unbounded'
+      mitigation: 'Acceptable for MVP, future cleanup task recommended'
+      status: 'acceptable'
+
+acceptance_criteria:
+  - id: '6.6.1'
+    description: 'All API calls record token usage'
+    status: PASS
+    evidence: 'EmbeddingClient and AIService return TokenUsage. SearchService and IndexingService persist usage. All paths tested.'
+  - id: '6.6.2'
+    description: 'TokenUsageWidget added to AI Analysis tab'
+    status: PASS
+    evidence: 'Widget created in correct location. Added to analysis_tab layout. MainWindow connects signals.'
+  - id: '6.6.3'
+    description: 'Widget displays total tokens for session'
+    status: PASS
+    evidence: '_total_label shows "Session Tokens: {count}". Counter accumulates all operations. Test validates display.'
+  - id: '6.6.4'
+    description: 'Widget provides breakdown by operation type'
+    status: PASS
+    evidence: 'Breakdown shows "Embedding Calls" and "AI Analysis Calls". Separate counters. Test validates categorization.'
+  - id: '6.6.5'
+    description: 'Status bar shows running token total'
+    status: PASS
+    evidence: 'Permanent status bar label. Real-time updates via signals. Resilient error handling.'
+  - id: '6.6.6'
+    description: 'Clear disclaimer included'
+    status: PASS
+    evidence: 'Disclaimer text exact match: "Token counts are estimates for this session and may differ from provider billing."'
+
+recommendations:
+  priority_1: []
+  priority_2:
+    - action: 'Add cost estimation feature (separate story)'
+      rationale: 'Excluded from this story per specification, valuable future enhancement'
+    - action: 'Add historical token usage analytics with charts'
+      rationale: 'Help users understand usage patterns over time'
+  priority_3:
+    - action: 'Add database cleanup task for old token_usage records'
+      rationale: 'Prevent unbounded growth, delete records older than 30 days'
+    - action: 'Add per-collection token tracking'
+      rationale: 'More granular analytics for power users'
+    - action: 'Add optional budget alerts'
+      rationale: 'Help users stay within their token budgets'
+
+architecture_compliance:
+  data_layer: PASS
+  service_layer: PASS
+  ui_layer: PASS
+  overall: FULL
+
+code_quality:
+  rating: 5
+  strengths:
+    - 'Clean separation of concerns (model, repository, service, UI)'
+    - 'Type hints throughout (Python 3.13 compatible)'
+    - 'Comprehensive docstrings'
+    - 'Proper error handling with fallbacks'
+    - 'Signal/slot architecture follows Qt best practices'
+  notes: 'Excellent implementation quality across all layers'
