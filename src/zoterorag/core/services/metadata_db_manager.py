@@ -90,3 +90,9 @@ class MetadataDBManager:
         row = self._get_connection().execute("SELECT IFNULL(MAX(vector_id), 0) AS max_id FROM chunks").fetchone()
         current_max = row["max_id"] if row and row["max_id"] is not None else 0
         return int(current_max) + 1
+
+    def has_documents(self) -> bool:
+        """Return True if at least one document is already indexed."""
+
+        row = self._get_connection().execute("SELECT 1 FROM documents LIMIT 1").fetchone()
+        return row is not None

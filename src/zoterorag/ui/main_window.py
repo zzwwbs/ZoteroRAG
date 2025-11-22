@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
             self._library_view.set_items(items)
             collections = self._zotero_manager.get_collections()
             self._indexing_scope_view.set_collections(collections)
+            self._maybe_enable_search_from_existing_index()
         except ZoteroDatabaseError as error:
             self._library_view.show_error(str(error))
 
@@ -466,6 +467,14 @@ class MainWindow(QMainWindow):
         if self._search_tab_index >= 0:
             self._main_tabs.setTabEnabled(self._search_tab_index, enabled)
             self.search_tab.setEnabled(enabled)
+
+    def _maybe_enable_search_from_existing_index(self) -> None:
+        """Enable Search tab when an existing index is already present."""
+        try:
+            if self._metadata_manager.has_documents():
+                self._set_search_tab_enabled(True)
+        except Exception:
+            logger.exception("Failed to check existing index presence")
 
     def _update_analysis_controls(self) -> None:
         """Update visibility and enabled state of AI analysis controls."""

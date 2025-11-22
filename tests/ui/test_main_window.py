@@ -132,6 +132,25 @@ def test_shows_onboarding_when_path_invalid(qapp):
     assert window._stack.currentWidget() == window._onboarding_view
 
 
+def test_search_tab_enables_with_existing_index(qapp):
+    """If an index already exists, Search tab should be enabled on load."""
+    settings_mgr = FakeSettingsManager(onboarding_completed=True, zotero_path=Path("/tmp/ok"))
+    zotero_mgr = FakeZoteroManager(valid=True)
+
+    window = MainWindow(
+        settings_manager=settings_mgr,
+        zotero_manager=zotero_mgr,
+        search_service=MagicMock(),
+        auto_start=False,
+    )
+    assert window._main_tabs.isTabEnabled(window._search_tab_index) is False
+
+    window._metadata_manager.has_documents = lambda: True  # type: ignore[assignment]
+    window._maybe_enable_search_from_existing_index()
+
+    assert window._main_tabs.isTabEnabled(window._search_tab_index) is True
+
+
 def test_tab_widget_sets_up_four_tabs(qapp):
     """Main window should initialize four tabs with expected labels."""
     settings_mgr = FakeSettingsManager(onboarding_completed=True, zotero_path=Path("/tmp/ok"))
