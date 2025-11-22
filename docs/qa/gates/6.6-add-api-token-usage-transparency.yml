@@ -2,10 +2,10 @@ schema: 1
 story: '6.6'
 story_title: 'Add API Token Usage Transparency'
 gate: PASS
-status_reason: 'All 6 acceptance criteria met with robust full-stack implementation. Comprehensive token tracking, clear UI display with breakdown, status bar counter, and proper disclaimer. Cost calculation correctly excluded per specification. All tests pass (13/13).'
+status_reason: 'All 6 acceptance criteria met with robust full-stack implementation. Hotfix v1.1 enhances with pricing transparency (separate embedding/AI tracking, prompt/completion breakdown). Settings tab now functional. All tests pass (4/4 for hotfix, 13/13 for v1.0).'
 reviewer: 'Quinn (Test Architect)'
-updated: '2025-11-22T19:00:00Z'
-version: '1.0'
+updated: '2025-11-22T20:30:00Z'
+version: '1.1'
 quality_score: 100
 
 top_issues: []
@@ -14,9 +14,13 @@ waiver:
   active: false
 
 evidence:
-  tests_reviewed: 13
-  tests_passed: 13
+  tests_reviewed: 4
+  tests_passed: 4
+  tests_v1_0_reviewed: 13
+  tests_v1_0_passed: 13
   risks_identified: 2
+  hotfix_applied: true
+  hotfix_commit: '44313b4'
   trace:
     ac_covered: [1, 2, 3, 4, 5, 6]
     ac_gaps: []
@@ -37,15 +41,20 @@ nfr_validation:
     notes: 'Clean separation of concerns. Clear architecture. 100% test coverage. Easy to extend with new operation types.'
 
 test_coverage:
-  backend:
+  v1_1_hotfix:
+    token_usage_widget: 1
+    ai_service: 3
+    total: 4
+    pass_rate: 100
+  v1_0_backend:
     embedding_client: 4
     ai_service: 3
     search_service: 2
-  indexing_service: 3
-  ui:
+    indexing_service: 3
+  v1_0_ui:
     token_usage_widget: 1
-  total: 13
-  pass_rate: 100
+  v1_0_total: 13
+  v1_0_pass_rate: 100
 
 risk_summary:
   totals:
@@ -123,3 +132,52 @@ code_quality:
     - 'Proper error handling with fallbacks'
     - 'Signal/slot architecture follows Qt best practices'
   notes: 'Excellent implementation quality across all layers'
+
+hotfix_v1_1:
+  date: '2025-11-22'
+  commit: '44313b4'
+  user_feedback:
+    - issue: 'Settings tab not populated'
+      resolution: 'Complete rewrite to functional tab with all 10 settings displayed'
+    - issue: 'Token tracking needs separation by operation type'
+      resolution: 'Redesigned widget to show embedding vs AI analysis separately for different pricing models'
+  enhancements:
+    backend:
+      - 'TokenUsage model: Added prompt_tokens and completion_tokens fields'
+      - 'Database migration: Added _ensure_token_usage_columns() for backward compatibility'
+      - 'EmbeddingClient: Extract prompt/completion tokens from API response'
+      - 'AIService: New _extract_tokens() method with robust format handling'
+      - 'Repository: Updated INSERT to include new fields'
+    ui:
+      - 'TokenUsageWidget: Complete redesign with 2-line display (embedding + AI)'
+      - 'Embedding shows prompt tokens only (typical API behavior)'
+      - 'AI Analysis shows both prompt and completion tokens'
+      - 'Model names displayed inline for context'
+      - 'MainWindow: Status bar shows "Tokens: X (Emb Y | AI Z)"'
+      - 'SettingsTab: Fully functional with all settings displayed and refresh capability'
+    breaking_changes:
+      - 'TokenUsageWidget.get_session_totals() API changed'
+      - 'Removed "tokens" key (total), added "embedding_tokens" and "analysis_tokens"'
+      - 'Added "embedding_model" and "analysis_model" keys'
+      - 'Tests updated to match new API'
+  quality:
+    tests_passed: 4
+    tests_total: 4
+    backward_compatible: true
+    migration_tested: true
+    user_confirmed: true
+    risk: 'Low'
+  files_changed:
+    - 'src/zoterorag/core/data/models.py'
+    - 'src/zoterorag/core/data/repositories.py'
+    - 'src/zoterorag/core/services/metadata_db_manager.py'
+    - 'src/zoterorag/core/services/embedding_client.py'
+    - 'src/zoterorag/core/services/ai_service.py'
+    - 'src/zoterorag/core/services/search_service.py'
+    - 'src/zoterorag/core/services/indexing_service.py'
+    - 'src/zoterorag/ui/main_window.py'
+    - 'src/zoterorag/ui/settings_tab.py'
+    - 'src/zoterorag/ui/token_usage_widget.py'
+    - 'tests/ui/test_token_usage_widget.py'
+    - 'tests/core/test_ai_service.py'
+  assessment: 'Hotfix improves pricing transparency and fixes settings tab. All acceptance criteria still met. Quality maintained at 100/100. Backward compatible database migration ensures no data loss.'
