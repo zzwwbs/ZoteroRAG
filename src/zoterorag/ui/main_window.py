@@ -140,10 +140,13 @@ class MainWindow(QMainWindow):
         self.index_tab.cancel_indexing.connect(self._cancel_indexing_task)
 
         self.analysis_tab = AnalysisTab()
-        self._analysis_label = self.analysis_tab.analysis_label
         self._analysis_loading = self.analysis_tab.loading_label
+        self._chat_view = self.analysis_tab.chat_view
+        self._chat_input = self.analysis_tab.chat_input
+        self._chat_send_button = self.analysis_tab.send_button
         self._analyze_button = self.analysis_tab.analyze_button
         self._analyze_button.clicked.connect(self._handle_analyze_clicked)
+        self._chat_send_button.clicked.connect(self._handle_send_message)
 
         self.settings_tab = SettingsTab(self._settings_manager, self._open_settings_dialog)
 
@@ -335,12 +338,12 @@ class MainWindow(QMainWindow):
         self._state.selected_paper = None
         self._state.current_query = result.query
         self._has_search_selection = False
+        self._chat_view.clear_messages()
         self._refresh_results_views()
         match_count = len(self._state.search_matches)
         self._search_view.set_status(
             f"Found {match_count} results (embedding {len(result.query_embedding)} dims)."
         )
-        self._analysis_label.setText("")
         self._update_analysis_controls()
 
     def _handle_search_error(self, message: str) -> None:
@@ -353,11 +356,12 @@ class MainWindow(QMainWindow):
 
     def _handle_analyze_clicked(self) -> None:
         if not self._state.search_matches:
-            self._analysis_label.setText("No results to analyze.")
+            self._chat_view.add_message("Error", "No results to analyze.", role="error", is_error=True)
             return
         if not self._state.current_query:
-            self._analysis_label.setText("No query available to analyze.")
+            self._chat_view.add_message("Error", "No query available to analyze.", role="error", is_error=True)
             return
+        self._chat_view.clear_messages()
         top_n = self._chunk_count.value()
         worker = _AIAnalyzeRunnable(
             self._ai_service,
@@ -372,7 +376,6 @@ class MainWindow(QMainWindow):
         self._set_analysis_busy(True)
         self._analysis_loading.setVisible(True)
         self._analysis_loading.setText("Analyzing with AI...")
-        self._analysis_label.setText("")
         self._thread_pool.start(worker)
 
     def _handle_copy_to_chatgpt(self) -> None:
@@ -389,14 +392,44 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Copy to ChatGPT", "Prompt copied to clipboard.")
 
     def _handle_analysis_result(self, text: str) -> None:
-        self._analysis_label.setText(text)
+        self._chat_view.add_message("Assistant", text, role="assistant")
 
     def _handle_analysis_error(self, message: str) -> None:
-        self._analysis_label.setText(f"Analysis failed: {message}")
+        self._chat_view.add_message("Error", f"Analysis failed: {message}", role="error", is_error=True)
 
     def _handle_analysis_finished(self) -> None:
         self._set_analysis_busy(False)
         self._analysis_loading.setVisible(False)
+
+    def _handle_send_message(self) -> None:
+        if bool(self._analyze_button.property("busy")):
+            return
+        text = self._chat_input.toPlainText().strip()
+        if not text:
+            self._chat_view.add_message("System", "Enter a question to send.", role="error", is_error=True)
+            return
+        if not self._state.search_matches:
+            self._chat_view.add_message("Error", "Run a search and select results before chatting.", role="error", is_error=True)
+            return
+
+        self._chat_view.add_message("You", text, role="user")
+        self._chat_input.clear()
+        top_n = self._chunk_count.value()
+        self._state.current_query = text
+        worker = _AIAnalyzeRunnable(
+            self._ai_service,
+            text,
+            self._state.search_matches,
+            top_n,
+        )
+        worker.signals.result.connect(self._handle_analysis_result)
+        worker.signals.error.connect(self._handle_analysis_error)
+        worker.signals.finished.connect(self._handle_analysis_finished)
+        worker.signals.usage.connect(self._handle_token_usage)
+        self._set_analysis_busy(True)
+        self._analysis_loading.setVisible(True)
+        self._analysis_loading.setText("Sending...")
+        self._thread_pool.start(worker)
 
     def _set_analysis_busy(self, busy: bool) -> None:
         self._analyze_button.setProperty("busy", busy)
@@ -557,11 +590,11 @@ class MainWindow(QMainWindow):
         self._analyze_button.setVisible(True)
         self._analysis_loading.setVisible(busy)
         self._analyze_button.setEnabled(enabled)
+        self._chat_send_button.setEnabled(enabled)
         self._chunk_count.setEnabled(not busy)
 
         if not can_analyze:
             tooltip = "Configure AI analysis and API keys in Settings to enable analysis."
-            self._analysis_label.setText("")
             self._analysis_loading.setText("AI analysis unavailable; configure settings.")
         elif not has_results:
             tooltip = "Run a search to enable analysis."

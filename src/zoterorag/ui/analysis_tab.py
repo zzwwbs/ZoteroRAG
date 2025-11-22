@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QTextEdit
+
+from .chat_view import ChatView
 
 class AnalysisTab(QWidget):
     """Holds placeholders for AI-generated analysis and token usage data."""
@@ -18,15 +20,20 @@ class AnalysisTab(QWidget):
         self.loading_label = QLabel()
         self.loading_label.setVisible(False)
 
-        self.analysis_label = QLabel()
-        self.analysis_label.setWordWrap(True)
-        self.analysis_label.setMinimumHeight(80)
-        self.analysis_label.setTextInteractionFlags(
-            self.analysis_label.textInteractionFlags() | Qt.TextSelectableByMouse
-        )
+        self.chat_view = ChatView()
+        self.chat_input = QTextEdit()
+        self.chat_input.setPlaceholderText("Type a follow-up question…")
+        self.chat_input.setFixedHeight(80)
+        self.send_button = QPushButton("Send")
+        self.send_button.setToolTip("Send a new question based on current search results.")
+
+        input_row = QHBoxLayout()
+        input_row.addWidget(self.chat_input, stretch=1)
+        input_row.addWidget(self.send_button)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.analyze_button)
         layout.addWidget(self.loading_label)
-        layout.addWidget(self.analysis_label)
+        layout.addWidget(self.chat_view)
+        layout.addLayout(input_row)
         layout.addStretch()
