@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Tuple
 
 import requests
 from requests import Response, Session
 
 from ...config.settings_manager import SettingsManager
+from ..data.models import TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,8 @@ class EmbeddingClient:
         self._session_factory = session_factory
         self._session = self._session_factory()
 
-    def get_embedding(self, text: str) -> list[float]:
-        """Send text to the embeddings endpoint and return the vector."""
+    def get_embedding(self, text: str) -> tuple[list[float], TokenUsage]:
+        """Send text to the embeddings endpoint and return the vector plus token usage."""
 
         api_key = self._settings_manager.get_api_key()
         if not api_key:
@@ -62,7 +63,9 @@ class EmbeddingClient:
         self._handle_errors(response)
         data = response.json()
         try:
-            return data["data"][0]["embedding"]
+            vector = data["data"][0]["embedding"]
+            usage = self._build_usage(data.get("usage") or {}, model=self._model)
+            return vector, usage
         except (KeyError, IndexError, TypeError) as error:
             logger.exception("Unexpected embedding response format.")
             raise EmbeddingClientError("Invalid response format from embeddings API.") from error
@@ -95,3 +98,11 @@ class EmbeddingClient:
         if isinstance(error_info, str):
             return error_info
         return None
+
+    def _build_usage(self, usage_payload: dict[str, Any], *, model: str) -> TokenUsage:
+        tokens = int(usage_payload.get("total_tokens") or 0)
+        return TokenUsage(
+            operation="embedding",
+            tokens_used=tokens,
+            model=model,
+        )

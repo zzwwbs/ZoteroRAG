@@ -44,6 +44,7 @@ class IndexingService:
         self._chunk_overlap = chunk_overlap
         self._progress_callback: Callable[[Dict[str, Any]], None] | None = None
         self._cancel_event = threading.Event()
+        self._usage_callback: Callable[[Any], None] | None = None
 
         self._metadata_manager.initialize_database()
         try:
@@ -53,6 +54,9 @@ class IndexingService:
 
     def set_progress_callback(self, callback: Callable[[Dict[str, Any]], None] | None) -> None:
         self._progress_callback = callback
+
+    def set_usage_callback(self, callback: Callable[[Any], None] | None) -> None:
+        self._usage_callback = callback
 
     def cancel_indexing(self) -> None:
         """Signal the current indexing run to stop after the current item."""
@@ -178,7 +182,11 @@ class IndexingService:
             page_number += 1
 
             for chunk in chunks:
-                embedding = embedding_client.get_embedding(chunk.content)
+                embedding, usage = embedding_client.get_embedding(chunk.content)
+                if usage.tokens_used > 0:
+                    self._metadata_manager.token_usage_repository.insert(usage)
+                    if self._usage_callback:
+                        self._usage_callback(usage)
                 vector_id = self._metadata_manager.get_next_vector_id()
                 chunk.vector_id = vector_id
                 self._metadata_manager.chunk_repository.insert(chunk)

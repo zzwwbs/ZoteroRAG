@@ -84,8 +84,9 @@ def test_analyze_chunks_replaces_placeholders():
         model="test-model",
         base_url="https://example.com/v1",
     )
-    result = service.analyze_chunks("query", [_match()], top_n=5)
+    result, usage = service.analyze_chunks("query", [_match()], top_n=5)
     assert "[1]" in result
+    assert usage.tokens_used == 0
     # Verify payload chunk inclusion
     sent = session.requests[0]["json"]
     user_content = sent["messages"][1]["content"]

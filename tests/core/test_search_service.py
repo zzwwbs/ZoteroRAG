@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from zoterorag.core.data.models import Chunk, Document
+from zoterorag.core.data.models import Chunk, Document, TokenUsage
 from zoterorag.core.data.repositories import ChunkRepository, DocumentRepository
 from zoterorag.core.services.metadata_db_manager import SCHEMA_SQL
 from zoterorag.core.services.search_service import SearchService, SearchServiceError
@@ -17,8 +17,12 @@ class FakeEmbeddingClient:
     def __init__(self, embedding: list[float]) -> None:
         self._embedding = embedding
 
-    def get_embedding(self, text: str) -> list[float]:
-        return self._embedding
+    def get_embedding(self, text: str) -> tuple[list[float], TokenUsage]:
+        return self._embedding, TokenUsage(
+            operation="embedding",
+            tokens_used=5,
+            model="text-embedding-ada-002",
+        )
 
 
 class FakeVectorManager:
@@ -34,6 +38,16 @@ class StubMetadataManager:
     def __init__(self, doc_repo: DocumentRepository, chunk_repo: ChunkRepository) -> None:
         self.document_repository = doc_repo
         self.chunk_repository = chunk_repo
+        self.token_usage_repository = _DummyUsageRepo()
+
+
+class _DummyUsageRepo:
+    def __init__(self) -> None:
+        self.inserted: list[TokenUsage] = []
+
+    def insert(self, usage: TokenUsage) -> TokenUsage:
+        self.inserted.append(usage)
+        return usage
 
 
 def _setup_repos():

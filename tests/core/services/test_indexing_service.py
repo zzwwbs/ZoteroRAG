@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from zoterorag.core.data.models import Chunk, Document
+from zoterorag.core.data.models import Chunk, Document, TokenUsage
 from zoterorag.core.services.indexing_service import IndexingService
 from zoterorag.core.services.zotero_manager import ZoteroItem
 
@@ -55,6 +55,7 @@ class DummyMetadataManager:
         self.document_repository = DummyDocumentRepository()
         self.chunk_repository = DummyChunkRepository()
         self._vector_counter = 0
+        self.token_usage_repository = DummyTokenUsageRepository()
 
     def initialize_database(self) -> None:  # pragma: no cover - no-op
         pass
@@ -65,6 +66,15 @@ class DummyMetadataManager:
     def get_next_vector_id(self) -> int:
         self._vector_counter += 1
         return self._vector_counter
+
+
+class DummyTokenUsageRepository:
+    def __init__(self) -> None:
+        self.records: list[TokenUsage] = []
+
+    def insert(self, usage: TokenUsage) -> TokenUsage:
+        self.records.append(usage)
+        return usage
 
 
 class DummyVectorManager:
@@ -87,9 +97,13 @@ class DummyEmbeddingClient:
     def __init__(self) -> None:
         self.requests: list[str] = []
 
-    def get_embedding(self, text: str) -> list[float]:
+    def get_embedding(self, text: str):
         self.requests.append(text)
-        return [float(len(text))]
+        return [float(len(text))], TokenUsage(
+            operation="embedding",
+            tokens_used=1,
+            model="text-embedding-ada-002",
+        )
 
 
 def dummy_chunker(text: str, document_id: int, page_number: int, chunk_size: int, chunk_overlap: int):

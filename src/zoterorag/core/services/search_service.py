@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
-    from ..data.models import Chunk, Document
+    from ..data.models import Chunk, Document, TokenUsage
 
 from .embedding_client import EmbeddingClient, EmbeddingClientError
 from .metadata_db_manager import MetadataDBManager
@@ -29,6 +29,7 @@ class SearchResult:
     distances: list[float] | None = None
     vector_ids: list[int] | None = None
     matches: list["SearchMatch"] | None = None
+    token_usage: "TokenUsage | None" = None
 
 
 @dataclass
@@ -64,7 +65,9 @@ class SearchService:
             raise SearchServiceError("Search query cannot be empty.")
 
         try:
-            query_embedding = self._embedding_client.get_embedding(normalized)
+            query_embedding, usage = self._embedding_client.get_embedding(normalized)
+            if usage.tokens_used > 0:
+                self._metadata_manager.token_usage_repository.insert(usage)
         except EmbeddingClientError as error:
             raise SearchServiceError(str(error)) from error
 
@@ -88,6 +91,7 @@ class SearchService:
             distances=distances,
             vector_ids=vector_ids,
             matches=matches,
+            token_usage=usage if "usage" in locals() else None,
         )
 
     def _build_matches(

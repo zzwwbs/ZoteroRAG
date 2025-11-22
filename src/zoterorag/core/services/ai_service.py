@@ -10,6 +10,8 @@ import requests
 from requests import Session
 
 from ...config.settings_manager import SettingsManager
+from .metadata_db_manager import MetadataDBManager
+from ..data.models import TokenUsage
 from .search_service import SearchMatch
 
 logger = logging.getLogger(__name__)
@@ -41,14 +43,16 @@ class AIService:
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
         session_factory: Callable[[], Session] = requests.Session,
+        metadata_manager: MetadataDBManager | None = None,
     ) -> None:
         self._settings_manager = settings_manager
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._session_factory = session_factory
         self._session = self._session_factory()
+        self._metadata_manager = metadata_manager
 
-    def analyze_chunks(self, query: str, matches: Sequence[SearchMatch], top_n: int = 10) -> str:
+    def analyze_chunks(self, query: str, matches: Sequence[SearchMatch], top_n: int = 10) -> tuple[str, TokenUsage]:
         """Send query and top N chunks to LLM and return synthesized answer with citations."""
 
         api_key = self._settings_manager.get_api_key()
@@ -93,10 +97,20 @@ class AIService:
         data = response.json()
         try:
             content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as error:
+            usage_payload = data.get("usage") or {}
+            tokens = int(usage_payload.get("total_tokens") or 0)
+        except (KeyError, IndexError, TypeError, ValueError) as error:
             raise AIServiceError("Invalid response format from AI API.") from error
 
-        return self._apply_citations(content, citations)
+        usage = TokenUsage(
+            operation="chat_completion",
+            tokens_used=tokens,
+            model=self._model,
+        )
+        if self._metadata_manager:
+            self._metadata_manager.token_usage_repository.insert(usage)
+
+        return self._apply_citations(content, citations), usage
 
     @staticmethod
     def _build_citations(matches: Sequence[SearchMatch]) -> list[Citation]:

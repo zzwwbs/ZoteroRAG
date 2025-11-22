@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import datetime
 
-from .models import Chunk, Document
+from .models import Chunk, Document, TokenUsage
 
 
 class DocumentRepository:
@@ -132,3 +132,43 @@ class ChunkRepository:
             )
             for row in rows
         ]
+
+
+class TokenUsageRepository:
+    """CRUD helpers for tracking token usage."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def insert(self, usage: TokenUsage) -> TokenUsage:
+        cursor = self._connection.execute(
+            """
+            INSERT INTO token_usage (timestamp, operation, tokens_used, model)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                usage.timestamp.isoformat(),
+                usage.operation,
+                usage.tokens_used,
+                usage.model,
+            ),
+        )
+        self._connection.commit()
+        usage.id = cursor.lastrowid
+        return usage
+
+    def get_session_totals(self) -> dict:
+        row = self._connection.execute(
+            """
+            SELECT
+                COALESCE(SUM(tokens_used), 0) AS tokens,
+                SUM(CASE WHEN operation = 'embedding' THEN 1 ELSE 0 END) AS embedding_calls,
+                SUM(CASE WHEN operation = 'chat_completion' THEN 1 ELSE 0 END) AS analysis_calls
+            FROM token_usage
+            """
+        ).fetchone()
+        return {
+            "tokens": int(row["tokens"] or 0),
+            "embedding_calls": int(row["embedding_calls"] or 0),
+            "analysis_calls": int(row["analysis_calls"] or 0),
+        }

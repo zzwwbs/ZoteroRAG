@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from ..data.repositories import ChunkRepository, DocumentRepository
+from ..data.repositories import ChunkRepository, DocumentRepository, TokenUsageRepository
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks (document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_vector_id ON chunks (vector_id);
+
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    tokens_used INTEGER NOT NULL,
+    model TEXT NOT NULL
+);
 """
 
 
@@ -68,6 +76,7 @@ class MetadataDBManager:
             self._local.connection = None
             self._local.document_repo = None
             self._local.chunk_repo = None
+            self._local.token_usage_repo = None
 
     @property
     def document_repository(self) -> DocumentRepository:
@@ -82,6 +91,13 @@ class MetadataDBManager:
         if not hasattr(self._local, "chunk_repo") or self._local.chunk_repo is None:
             self._local.chunk_repo = ChunkRepository(self._get_connection())
         return self._local.chunk_repo
+
+    @property
+    def token_usage_repository(self) -> TokenUsageRepository:
+        """Get or create a TokenUsageRepository for the current thread."""
+        if not hasattr(self._local, "token_usage_repo") or self._local.token_usage_repo is None:
+            self._local.token_usage_repo = TokenUsageRepository(self._get_connection())
+        return self._local.token_usage_repo
 
     def get_document_by_key(self, zotero_key: str) -> Document | None:
         return self.document_repository.get_by_zotero_key(zotero_key)

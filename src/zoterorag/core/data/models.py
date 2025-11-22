@@ -32,6 +32,17 @@ class Chunk:
 
 
 @dataclass
+class TokenUsage:
+    """Tracks API token consumption for embedding and AI analysis operations."""
+
+    operation: str  # "embedding" or "chat_completion"
+    tokens_used: int
+    model: str
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    id: int | None = None
+
+
+@dataclass
 class Collection:
     """Represents a Zotero collection."""
 

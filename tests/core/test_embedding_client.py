@@ -50,8 +50,9 @@ def test_get_embedding_success_returns_vector():
         session_factory=lambda: FakeSession(responder),
     )
 
-    result = client.get_embedding("hello world")
-    assert result == [0.1, 0.2, 0.3]
+    vector, usage = client.get_embedding("hello world")
+    assert vector == [0.1, 0.2, 0.3]
+    assert usage.tokens_used == 0
 
 
 def test_missing_api_key_raises():

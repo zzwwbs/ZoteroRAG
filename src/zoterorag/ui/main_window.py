@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QTabWidget,
     QFileDialog,
+    QLabel,
     QWidget,
 )
 
@@ -54,6 +55,8 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Primary shell window with setup detection and onboarding."""
 
+    token_usage_recorded = Signal(object)
+
     def __init__(
         self,
         settings_manager: SettingsManager | None = None,
@@ -72,7 +75,7 @@ class MainWindow(QMainWindow):
         self._metadata_manager = MetadataDBManager()
         self._vector_manager = VectorDBManager(dimension=1536)
         self._embedding_client = EmbeddingClient(self._settings_manager)
-        self._ai_service = AIService(self._settings_manager)
+        self._ai_service = AIService(self._settings_manager, metadata_manager=self._metadata_manager)
         self._search_service = search_service or SearchService(
             self._embedding_client,
             self._vector_manager,
@@ -89,6 +92,9 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget()
         self.setCentralWidget(self._stack)
+        self._token_status = QLabel("Tokens: 0")
+        self._session_token_total = 0
+        self.statusBar().addPermanentWidget(self._token_status)
 
         self._onboarding_view = OnboardingView(self._zotero_manager)
         self._onboarding_view.done.connect(self._handle_onboarding_complete)
@@ -120,6 +126,7 @@ class MainWindow(QMainWindow):
         self.analysis_tab = AnalysisTab()
         self._analysis_label = self.analysis_tab.analysis_label
         self._analysis_loading = self.analysis_tab.loading_label
+        self._token_usage_widget = self.analysis_tab.token_usage_widget
 
         self.settings_tab = SettingsTab()
 
@@ -140,6 +147,8 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._main_container)
 
         self._setup_menu_bar()
+        self.token_usage_recorded.connect(self._handle_token_usage)
+        self.token_usage_recorded.connect(self._token_usage_widget.update_usage)
         if auto_start:
             self._determine_initial_view()
         self._load_state_from_settings()
@@ -264,6 +273,7 @@ class MainWindow(QMainWindow):
         worker = _IndexingRunnable(self._indexing_service, scope)
         worker.signals.progress.connect(self._handle_indexing_progress)
         worker.signals.finished.connect(self._handle_indexing_finished)
+        worker.signals.token_usage.connect(self.token_usage_recorded.emit)
         self._indexing_scope_view.set_busy(True)
         self._thread_pool.start(worker)
 
@@ -296,6 +306,7 @@ class MainWindow(QMainWindow):
         worker.signals.result.connect(self._handle_search_result)
         worker.signals.error.connect(self._handle_search_error)
         worker.signals.finished.connect(self._handle_search_finished)
+        worker.signals.usage.connect(self.token_usage_recorded.emit)
         self._search_view.clear_messages()
         self._search_view.set_busy(True)
         self._search_view.set_status("Searching...")
@@ -338,6 +349,7 @@ class MainWindow(QMainWindow):
         worker.signals.result.connect(self._handle_analysis_result)
         worker.signals.error.connect(self._handle_analysis_error)
         worker.signals.finished.connect(self._handle_analysis_finished)
+        worker.signals.usage.connect(self.token_usage_recorded.emit)
         self._set_analysis_busy(True)
         self._analysis_loading.setVisible(True)
         self._analysis_loading.setText("Analyzing with AI...")
@@ -495,10 +507,20 @@ class MainWindow(QMainWindow):
         else:
             self._analysis_loading.setText("")
 
+    def _handle_token_usage(self, usage) -> None:
+        """Update status bar and session totals when token usage is recorded."""
+        try:
+            tokens = int(getattr(usage, "tokens_used", 0))
+        except Exception:
+            tokens = 0
+        self._session_token_total += max(0, tokens)
+        self._token_status.setText(f"Tokens: {self._session_token_total}")
+
 
 class _IndexingWorkerSignals(QObject):
     progress = Signal(dict)
     finished = Signal()
+    token_usage = Signal(object)
 
 
 class _IndexingRunnable(QRunnable):
@@ -513,9 +535,11 @@ class _IndexingRunnable(QRunnable):
     def run(self) -> None:
         try:
             self._service.set_progress_callback(self.signals.progress.emit)
+            self._service.set_usage_callback(self.signals.token_usage.emit)
             self._service.start_indexing(self._scope)
         finally:
             self._service.set_progress_callback(None)
+            self._service.set_usage_callback(None)
             self.signals.finished.emit()
 
 
@@ -523,6 +547,7 @@ class _SearchWorkerSignals(QObject):
     result = Signal(SearchResult)
     error = Signal(str)
     finished = Signal()
+    usage = Signal(object)
 
 
 class _SearchRunnable(QRunnable):
@@ -539,6 +564,8 @@ class _SearchRunnable(QRunnable):
         try:
             result = self._service.search(self._query, k=self._count)
             self.signals.result.emit(result)
+            if result.token_usage:
+                self.signals.usage.emit(result.token_usage)
         except SearchServiceError as error:
             self.signals.error.emit(str(error))
         except Exception as error:  # pragma: no cover - safeguard
@@ -570,6 +597,7 @@ class _AIWorkerSignals(QObject):
     result = Signal(str)
     error = Signal(str)
     finished = Signal()
+    usage = Signal(object)
 
 
 class _AIAnalyzeRunnable(QRunnable):
@@ -591,8 +619,9 @@ class _AIAnalyzeRunnable(QRunnable):
 
     def run(self) -> None:
         try:
-            result = self._service.analyze_chunks(self._query, self._matches, self._top_n)
+            result, usage = self._service.analyze_chunks(self._query, self._matches, self._top_n)
             self.signals.result.emit(result)
+            self.signals.usage.emit(usage)
         except (AIServiceError, UnauthorizedAIServiceError) as error:
             self.signals.error.emit(str(error))
         except Exception as error:  # pragma: no cover - safeguard
