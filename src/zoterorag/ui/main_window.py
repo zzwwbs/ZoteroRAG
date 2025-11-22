@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..config.settings_manager import SettingsManager
+from ..config.settings_manager import AppSettings
 from ..core.services.embedding_client import EmbeddingClient
 from ..core.services.indexing_service import IndexingService
 from ..core.services.metadata_db_manager import MetadataDBManager
@@ -92,7 +93,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._stack)
 
         self._onboarding_view = OnboardingView(self._zotero_manager)
-        self._onboarding_view.path_confirmed.connect(self._handle_path_selected)
+        self._onboarding_view.done.connect(self._handle_onboarding_complete)
 
         self._search_view = SearchView()
         self._search_view.search_triggered.connect(self._on_search)
@@ -148,8 +149,9 @@ class MainWindow(QMainWindow):
 
     def _determine_initial_view(self) -> None:
         saved_path = self._settings_manager.get_zotero_path()
+        onboarding_done = getattr(self._settings_manager.load_settings(), "onboarding_completed", False)
 
-        if saved_path and self._zotero_manager.is_valid_zotero_directory(saved_path):
+        if saved_path and self._zotero_manager.is_valid_zotero_directory(saved_path) and onboarding_done:
             self._show_main_view(saved_path)
             return
 
@@ -179,10 +181,58 @@ class MainWindow(QMainWindow):
         except ZoteroDatabaseError as error:
             self._library_view.show_error(str(error))
 
-    def _handle_path_selected(self, path: str) -> None:
-        actual_path = Path(path)
-        self._settings_manager.set_zotero_path(actual_path)
+    def _handle_onboarding_complete(self, path: str | None) -> None:
+        actual_path = Path(path) if path else None
+        # Load current settings first to ensure we have latest values
+        current_settings = self._settings_manager.load_settings()
+        # Save all settings including the new zotero path and onboarding completion flag
+        self._settings_manager.save_settings(
+            self._settings_manager._current_settings(
+                zotero_data_path=str(actual_path) if actual_path else None,
+                onboarding_completed=True,
+            )
+        )
         self._show_main_view(actual_path)
+        self._show_first_run_visual_cues()
+        QMessageBox.information(
+            self,
+            "Getting Started",
+            "Onboarding completed. Use 'Start Indexing' to build your index, or search once indexing is ready.",
+        )
+
+    def _show_first_run_visual_cues(self) -> None:
+        """Add helpful tooltips to key UI elements for first-time users."""
+        
+        # Add tooltip to search bar input
+        self._search_view._input.setToolTip(
+            "💡 Enter your search query here to find relevant papers using semantic search.\n"
+            "Example: 'machine learning applications in healthcare'"
+        )
+        
+        # Add tooltip to search button
+        self._search_view._start_button.setToolTip(
+            "🔍 Click to perform semantic search on your indexed papers"
+        )
+        
+        # Add tooltip to Start Indexing button
+        self._indexing_scope_view._start_button.setToolTip(
+            "👉 Click here to start indexing your Zotero library.\n"
+            "This creates embeddings for semantic search. You can index all papers or specific collections."
+        )
+        
+        # Add tooltip to library view
+        self._library_view.setToolTip(
+            "📚 Your Zotero library will appear here after indexing.\n"
+            "Browse your papers and collections."
+        )
+        
+        # Add tooltip to indexing scope options
+        self._indexing_scope_view._entire_radio.setToolTip(
+            "Index all papers in your Zotero library"
+        )
+        self._indexing_scope_view._collection_radio.setToolTip(
+            "Index only papers in a specific collection"
+        )
 
     def _setup_menu_bar(self) -> None:
         """Create the basic menu that includes the About dialog."""

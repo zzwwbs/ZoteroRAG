@@ -32,6 +32,7 @@ class AppSettings:
     default_search_results: int = 10
     theme: str = "auto"
     keyring_service: str = "zoterorag"
+    onboarding_completed: bool = False
 
 
 class SettingsManager:
@@ -74,6 +75,7 @@ class SettingsManager:
             default_search_results=int(raw.get("default_search_results", 10)),
             theme=raw.get("theme", "auto"),
             keyring_service=raw.get("keyring_service", "zoterorag"),
+            onboarding_completed=bool(raw.get("onboarding_completed", False)),
         )
 
     def save_settings(self, settings: AppSettings) -> None:
@@ -94,6 +96,7 @@ class SettingsManager:
             "default_search_results": settings.default_search_results,
             "theme": settings.theme,
             "keyring_service": settings.keyring_service,
+            "onboarding_completed": settings.onboarding_completed,
         }
         self._settings_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         self._settings = settings
@@ -111,13 +114,7 @@ class SettingsManager:
         normalized: str | None = (
             str(Path(path).expanduser()) if path else None
         )
-        self.save_settings(
-            AppSettings(
-                zotero_data_path=normalized,
-                api_key=self._settings.api_key,
-                enable_ai_analysis=self._settings.enable_ai_analysis,
-            )
-        )
+        self.save_settings(self._current_settings(zotero_data_path=normalized))
 
     def get_api_key(self) -> str | None:
         """Return the stored API key or fallback to environment configuration."""
@@ -139,13 +136,7 @@ class SettingsManager:
     def set_api_key(self, api_key: str | None) -> None:
         """Persist the provided API key."""
 
-        self.save_settings(
-            AppSettings(
-                zotero_data_path=self._settings.zotero_data_path,
-                api_key=api_key,
-                enable_ai_analysis=self._settings.enable_ai_analysis,
-            )
-        )
+        self.save_settings(self._current_settings(api_key=api_key))
 
     def set_api_key_securely(self, api_key: str | None) -> None:
         """Store the API key using the OS keyring when available."""
@@ -157,12 +148,7 @@ class SettingsManager:
                 else:
                     keyring.delete_password(self._keyring_service, "api_key")
                 # Keep in-memory settings consistent with api_key=None to prevent plaintext leakage
-                self._settings = AppSettings(
-                    zotero_data_path=self._settings.zotero_data_path,
-                    api_key=None,  # Never store plaintext in memory when using keyring
-                    enable_ai_analysis=self._settings.enable_ai_analysis,
-                    keyring_service=self._keyring_service,
-                )
+                self._settings = self._current_settings(api_key=None)
                 return
             except Exception as error:
                 logger.exception("Keyring set/delete failed")
@@ -172,23 +158,28 @@ class SettingsManager:
 
     def set_enable_ai_analysis(self, enabled: bool) -> None:
         """Toggle AI analysis setting and persist."""
-        self.save_settings(
-            AppSettings(
-                zotero_data_path=self._settings.zotero_data_path,
-                api_key=self._settings.api_key,
-                enable_ai_analysis=enabled,
-                api_base_url=self._settings.api_base_url,
-                embedding_model=self._settings.embedding_model,
-                chat_model=self._settings.chat_model,
-                chunk_size=self._settings.chunk_size,
-                chunk_overlap=self._settings.chunk_overlap,
-                default_search_results=self._settings.default_search_results,
-                theme=self._settings.theme,
-                keyring_service=self._keyring_service,
-            )
-        )
+        self.save_settings(self._current_settings(enable_ai_analysis=enabled))
 
     def refresh(self) -> AppSettings:
         """Reload settings from disk, discarding cached values."""
         self._settings = self.load_settings()
         return self._settings
+
+    def _current_settings(self, **overrides: Any) -> AppSettings:
+        """Return a copy of current settings with overrides."""
+        data = {
+            "zotero_data_path": self._settings.zotero_data_path,
+            "api_key": self._settings.api_key,
+            "enable_ai_analysis": self._settings.enable_ai_analysis,
+            "api_base_url": self._settings.api_base_url,
+            "embedding_model": self._settings.embedding_model,
+            "chat_model": self._settings.chat_model,
+            "chunk_size": self._settings.chunk_size,
+            "chunk_overlap": self._settings.chunk_overlap,
+            "default_search_results": self._settings.default_search_results,
+            "theme": self._settings.theme,
+            "keyring_service": self._settings.keyring_service,
+            "onboarding_completed": self._settings.onboarding_completed,
+        }
+        data.update(overrides)
+        return AppSettings(**data)

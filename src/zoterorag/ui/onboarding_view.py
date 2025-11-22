@@ -1,4 +1,4 @@
-"""First-launch onboarding experience for Zotero directory configuration."""
+"""First-launch onboarding experience with welcome, privacy, and Zotero path steps."""
 
 from __future__ import annotations
 
@@ -9,8 +9,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QPushButton,
+    QStackedWidget,
+    QPushButton,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
 )
 
 from ..core.services.zotero_manager import ZoteroManager
@@ -19,34 +22,32 @@ from ..core.services.zotero_manager import ZoteroManager
 class OnboardingView(QWidget):
     """UI displayed when a Zotero path is missing."""
 
-    path_confirmed = Signal(str)
+    done = Signal(str)
 
     def __init__(self, zotero_manager: ZoteroManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._zotero_manager = zotero_manager
-        self._status_label = QLabel()
-        self._path_label = QLabel()
-        self._select_button = QPushButton("Select Zotero Directory")
+        self._stack = QStackedWidget()
+        self._selected_path: Path | None = None
+
+        self._welcome = self._build_welcome()
+        self._privacy = self._build_privacy()
+        self._path_step = self._build_path_step()
+
+        self._stack.addWidget(self._welcome)
+        self._stack.addWidget(self._privacy)
+        self._stack.addWidget(self._path_step)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("<b>Configure your Zotero library</b>"))
-        layout.addWidget(self._status_label)
-        layout.addWidget(self._path_label)
-        layout.addWidget(self._select_button)
-        layout.addStretch()
-
-        self._select_button.clicked.connect(self._handle_manual_selection)
-
-        self._status_label.setText("Waiting to detect your Zotero directory...")
-        self._path_label.setText("")
+        layout.addWidget(self._stack)
 
     def _attempt_auto_detection(self) -> None:
         detected = self._zotero_manager.detect_zotero_directory()
 
         if detected:
+            self._selected_path = detected
             self._path_label.setText(f"Detected: {detected}")
             self._status_label.setText("Auto-detected a Zotero directory.")
-            self.path_confirmed.emit(str(detected))
             return
 
         self._status_label.setText("Auto-detection did not find a Zotero directory.")
@@ -78,4 +79,61 @@ class OnboardingView(QWidget):
 
         self._status_label.setText("Zotero directory verified.")
         self._path_label.setText(f"Selected: {selection}")
-        self.path_confirmed.emit(selection)
+        self._selected_path = candidate
+        self._finish(candidate)
+
+    def _finish(self, path: str | Path | None) -> None:
+        if isinstance(path, str):
+            path = Path(path)
+        self.done.emit(str(path) if path else "")
+
+    def _build_welcome(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.addWidget(QLabel("<b>Welcome to ZoteroRAG Desk</b>"))
+        layout.addWidget(QLabel("We will help you pick your Zotero library and review privacy notes."))
+        btn = QPushButton("Next")
+        btn.clicked.connect(lambda: self._stack.setCurrentWidget(self._privacy))
+        layout.addWidget(btn)
+        layout.addStretch()
+        return container
+
+    def _build_privacy(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.addWidget(QLabel("<b>Privacy & Cloud Disclosure</b>"))
+        layout.addWidget(QLabel("Embeddings and AI calls use your BYOK key; local data stays on your machine."))
+        self._privacy_ack = QCheckBox("I understand and accept these terms.")
+        next_btn = QPushButton("Next")
+        next_btn.clicked.connect(self._go_to_path_step)
+        layout.addWidget(self._privacy_ack)
+        layout.addWidget(next_btn)
+        layout.addStretch()
+        return container
+
+    def _go_to_path_step(self) -> None:
+        if not self._privacy_ack.isChecked():
+            return
+        self._stack.setCurrentWidget(self._path_step)
+        self.start_detection()
+
+    def _build_path_step(self) -> QWidget:
+        container = QWidget()
+        self._status_label = QLabel()
+        self._path_label = QLabel()
+        self._select_button = QPushButton("Select Zotero Directory")
+        finish_btn = QPushButton("Finish")
+        self._select_button.clicked.connect(self._handle_manual_selection)
+        finish_btn.clicked.connect(lambda: self._finish(self._selected_path))
+
+        layout = QVBoxLayout(container)
+        layout.addWidget(QLabel("<b>Choose your Zotero library</b>"))
+        layout.addWidget(self._status_label)
+        layout.addWidget(self._path_label)
+        layout.addWidget(self._select_button)
+        layout.addWidget(finish_btn)
+        layout.addStretch()
+
+        self._status_label.setText("Waiting to detect your Zotero directory...")
+        self._path_label.setText("")
+        return container
