@@ -107,3 +107,35 @@ class DocumentCollection:
     document_id: int
     collection_id: int
 ```
+
+---
+## TokenUsage
+
+**Purpose:** Tracks API token consumption for embedding and AI analysis operations (Epic 6.6). Enables transparency around costs and usage patterns.
+
+**Key Attributes:**
+*   `id`: `int` - The unique identifier for the usage record.
+*   `timestamp`: `datetime` - When the API call was made.
+*   `operation`: `str` - Type of operation (e.g., "embedding", "chat_completion").
+*   `tokens_used`: `int` - Number of tokens consumed.
+*   `model`: `str` - The model used (e.g., "text-embedding-ada-002", "gpt-4").
+*   `estimated_cost_usd`: `float` - Calculated cost based on model pricing.
+
+### Python Dataclass
+```python
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class TokenUsage:
+    id: int
+    timestamp: datetime
+    operation: str  # "embedding" or "chat_completion"
+    tokens_used: int
+    model: str
+    estimated_cost_usd: float
+```
+
+### Relationships
+*   Standalone tracking table with no foreign key relationships.
+*   Queried for session totals and historical analysis.

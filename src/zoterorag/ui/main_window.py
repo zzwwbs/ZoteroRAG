@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
 import subprocess
 import sys
 import logging
 import shutil
+from pathlib import Path
 from datetime import datetime
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Qt
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QMessageBox,
@@ -18,11 +18,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QStackedWidget,
     QVBoxLayout,
-    QWidget,
-    QPushButton,
-    QSpinBox,
-    QLabel,
+    QTabWidget,
     QFileDialog,
+    QWidget,
 )
 
 from ..config.settings_manager import SettingsManager
@@ -42,13 +40,12 @@ from ..core.services.zotero_manager import (
     ZoteroDatabaseError,
     ZoteroManager,
 )
-from .chunk_list_view import ChunkListView
-from .indexing_scope_view import IndexingScopeView
-from .library_view import LibraryView
 from .onboarding_view import OnboardingView
-from .paper_list_view import PaperListView
-from .search_view import SearchView
 from .settings_dialog import SettingsDialog
+from .analysis_tab import AnalysisTab
+from .index_tab import IndexTab
+from .search_tab import SearchTab
+from .settings_tab import SettingsTab
 from .state import AppState
 
 logger = logging.getLogger(__name__)
@@ -95,49 +92,47 @@ class MainWindow(QMainWindow):
         self._onboarding_view = OnboardingView(self._zotero_manager)
         self._onboarding_view.done.connect(self._handle_onboarding_complete)
 
-        self._search_view = SearchView()
+        self.search_tab = SearchTab()
+        self._search_view = self.search_tab.search_view
         self._search_view.search_triggered.connect(self._on_search)
         self._search_view.copy_to_chatgpt_requested.connect(self._handle_copy_to_chatgpt)
         self._search_view.export_pdfs_requested.connect(self._handle_export_pdfs)
 
-        self._library_view = LibraryView()
-        self._indexing_scope_view = IndexingScopeView()
-        self._indexing_scope_view.scope_selected.connect(self._start_indexing_task)
-        self._paper_list_view = PaperListView()
+        self._paper_list_view = self.search_tab.paper_list_view
         self._paper_list_view.paper_selected.connect(self._on_paper_selected)
         self._paper_list_view.clear_filter_requested.connect(self._clear_selection)
         self._paper_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
-        self._chunk_list_view = ChunkListView()
+
+        self._chunk_list_view = self.search_tab.chunk_list_view
         self._chunk_list_view.open_pdf_requested.connect(self._open_pdf_for_document)
-        self._analyze_button = QPushButton("Analyze with AI")
+
+        self._analyze_button = self.search_tab.analyze_button
         self._analyze_button.clicked.connect(self._handle_analyze_clicked)
-        self._analyze_button.setEnabled(False)
-        self._chunk_count = QSpinBox()
-        self._chunk_count.setRange(1, 50)
-        self._chunk_count.setValue(10)
-        self._chunk_count.setEnabled(False)
-        self._analysis_label = QLabel()
-        self._analysis_label.setWordWrap(True)
-        self._analysis_label.setMinimumHeight(80)
-        self._analysis_label.setTextInteractionFlags(
-            self._analysis_label.textInteractionFlags() | Qt.TextSelectableByMouse
-        )
-        self._analysis_loading = QLabel()
-        self._analysis_loading.setVisible(False)
-        self._analyze_button.setProperty("busy", False)
+        self._chunk_count = self.search_tab.chunk_count
+
+        self.index_tab = IndexTab()
+        self._library_view = self.index_tab.library_view
+        self._indexing_scope_view = self.index_tab.indexing_scope_view
+        self._indexing_scope_view.scope_selected.connect(self._start_indexing_task)
+
+        self.analysis_tab = AnalysisTab()
+        self._analysis_label = self.analysis_tab.analysis_label
+        self._analysis_loading = self.analysis_tab.loading_label
+
+        self.settings_tab = SettingsTab()
+
+        self._main_tabs = QTabWidget()
+        self._main_tabs.addTab(self.search_tab, "Search")
+        self._main_tabs.addTab(self.index_tab, "Index")
+        self._main_tabs.addTab(self.analysis_tab, "AI Analysis")
+        self._main_tabs.addTab(self.settings_tab, "Settings")
+        self._search_tab_index = self._main_tabs.indexOf(self.search_tab)
+        self._set_search_tab_enabled(False)
+        self._main_tabs.setCurrentWidget(self.index_tab)
 
         self._main_container = QWidget()
         main_layout = QVBoxLayout(self._main_container)
-        main_layout.addWidget(self._search_view)
-        main_layout.addWidget(self._library_view)
-        main_layout.addWidget(self._indexing_scope_view)
-        main_layout.addWidget(self._paper_list_view)
-        main_layout.addWidget(self._chunk_list_view)
-        main_layout.addWidget(QLabel("Chunks:"))
-        main_layout.addWidget(self._chunk_count)
-        main_layout.addWidget(self._analyze_button)
-        main_layout.addWidget(self._analysis_loading)
-        main_layout.addWidget(self._analysis_label)
+        main_layout.addWidget(self._main_tabs)
 
         self._stack.addWidget(self._onboarding_view)
         self._stack.addWidget(self._main_container)
@@ -159,6 +154,7 @@ class MainWindow(QMainWindow):
 
     def _show_main_view(self, zotero_path: Path | None = None) -> None:
         self._stack.setCurrentWidget(self._main_container)
+        self._main_tabs.setCurrentWidget(self.index_tab)
         self._refresh_library(zotero_path or self._settings_manager.get_zotero_path())
 
     def _show_onboarding_view(self) -> None:
@@ -256,6 +252,7 @@ class MainWindow(QMainWindow):
         )
 
     def _start_indexing_task(self, scope: dict) -> None:
+        self._set_search_tab_enabled(False)
         worker = _IndexingRunnable(self._indexing_service, scope)
         worker.signals.progress.connect(self._handle_indexing_progress)
         worker.signals.finished.connect(lambda: self._indexing_scope_view.set_busy(False))
@@ -264,6 +261,9 @@ class MainWindow(QMainWindow):
 
     def _handle_indexing_progress(self, payload: dict) -> None:
         self._indexing_scope_view.update_progress(payload)
+        if payload.get("status") == "complete":
+            self._set_search_tab_enabled(True)
+            self._main_tabs.setCurrentWidget(self.search_tab)
 
     def _on_search(self, query: str) -> None:
         worker = _SearchRunnable(self._search_service, query)
@@ -438,6 +438,12 @@ class MainWindow(QMainWindow):
         settings = self._settings_manager.load_settings()
         self._state.enable_ai_analysis = settings.enable_ai_analysis
         self._update_analysis_controls()
+
+    def _set_search_tab_enabled(self, enabled: bool) -> None:
+        """Toggle Search tab availability."""
+        if self._search_tab_index >= 0:
+            self._main_tabs.setTabEnabled(self._search_tab_index, enabled)
+            self.search_tab.setEnabled(enabled)
 
     def _update_analysis_controls(self) -> None:
         """Update visibility and enabled state of AI analysis controls."""

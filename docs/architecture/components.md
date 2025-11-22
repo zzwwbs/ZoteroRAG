@@ -3,16 +3,18 @@
 ## Component List
 
 ## ZoteroRAG Desk Application (Main UI)
-**Responsibility:** Provides the main graphical user interface, handles user input, displays results, and orchestrates interactions between core services.
+**Responsibility:** Provides the main graphical user interface using a tab-based layout (Epic 6.1). Manages QTabWidget with Search, Index Management, AI Analysis, and Settings tabs. Handles user input, orchestrates interactions between core services, launches non-modal dialogs (Epic 6.4), and tracks token usage (Epic 6.6).
 **Key Interfaces:**
-- User input handling (search queries, button clicks)
-- Display of search results, indexing progress, and application status
-- Navigation to settings and PDF viewer
+- Tab management (QTabWidget with 4 tabs)
+- User input handling (search queries, button clicks, double-click events)
+- Display of search results, indexing progress, application status, and token usage
+- Dialog launching (ChunkDetailDialog for Epic 6.4)
+- Token usage tracking and display (TokenUsageWidget for Epic 6.6)
 **Dependencies:** `ZoteroManager`, `IndexingService`, `SearchService`, `AIService`, `SettingsManager`.
-**Technology Stack:** PySide6.
+**Technology Stack:** PySide6 (QTabWidget, QMainWindow, QDialog).
 
 ## ZoteroManager
-**Responsibility:** Manages all read-only interactions with the user's Zotero database (`zotero.sqlite`) and associated PDF files. This includes detecting the Zotero directory, reading item and collection metadata, and locating PDF paths.
+**Responsibility:** Manages all read-only interactions with the user's Zotero database (`zotero.sqlite`) and associated PDF files. This includes detecting the Zotero directory, reading item and collection metadata, locating PDF paths, and providing paper counts per collection (Epic 6.3).
 **Key Interfaces:**
 - `detect_zotero_directory() -> str`
 - `get_collections() -> list[Collection]`
@@ -20,15 +22,18 @@
 - `get_all_documents() -> list[Document]`
 - `get_item_pdf_path(document_id) -> str`
 - `extract_text_from_pdf(pdf_path) -> str`
+- `get_collection_paper_counts() -> dict[int, int]` (Epic 6.3: maps collection_id to paper count)
+- `get_total_paper_count() -> int` (Epic 6.3: total papers across all collections)
 **Dependencies:** PyMuPDF, `sqlite3` (for `zotero.sqlite`).
 **Technology Stack:** Python, PyMuPDF.
 
 ## IndexingService
-**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing and progress reporting.
+**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, and cancellation (Epic 6.2).
 **Key Interfaces:**
 - `start_indexing(scope: IndexingScope) -> None`
 - `update_index() -> None`
 - `get_indexing_progress() -> IndexingProgress`
+- `cancel_indexing() -> None` (Epic 6.2: sets cancellation flag checked between documents)
 **Dependencies:** `ZoteroManager`, `ChunkingUtility`, `EmbeddingClient`, `VectorDBManager`, `MetadataDBManager`.
 **Technology Stack:** Python.
 
@@ -40,9 +45,9 @@
 **Technology Stack:** Python.
 
 ## EmbeddingClient
-**Responsibility:** Handles communication with the external OpenAI-compatible API to generate vector embeddings for text. Manages API requests, authentication (using user-provided key), and error handling for the embedding endpoint.
+**Responsibility:** Handles communication with the external OpenAI-compatible API to generate vector embeddings for text. Manages API requests, authentication (using user-provided key), error handling for the embedding endpoint, and token usage tracking (Epic 6.6).
 **Key Interfaces:**
-- `get_embedding(text: str) -> list[float]`
+- `get_embedding(text: str) -> tuple[list[float], TokenUsage]` (Epic 6.6: returns embedding vector and usage info)
 **Dependencies:** `SettingsManager`, `requests` (or similar HTTP client).
 **Technology Stack:** Python.
 
@@ -80,11 +85,30 @@
 **Technology Stack:** Python.
 
 ## AIService
-**Responsibility:** Handles communication with the external OpenAI-compatible API for AI analysis and synthesis of search results. Manages API requests, authentication, and error handling for the chat completions endpoint.
+**Responsibility:** Handles communication with the external OpenAI-compatible API for AI analysis and synthesis of search results. Manages API requests, authentication, error handling for the chat completions endpoint, and token usage tracking (Epic 6.6).
 **Key Interfaces:**
-- `analyze_chunks(query: str, chunks: list[Chunk]) -> str`
+- `analyze_chunks(query: str, chunks: list[Chunk]) -> tuple[str, TokenUsage]` (Epic 6.6: returns analysis text and usage info)
 **Dependencies:** `SettingsManager`, `requests`.
 **Technology Stack:** Python.
+
+## ChunkDetailDialog
+**Responsibility:** Displays full chunk text in a non-modal dialog (Epic 6.4). Supports navigation between chunks, text copying, and keyboard shortcuts. Remains open while user interacts with main window.
+**Key Interfaces:**
+- `show_chunk(chunk: Chunk, all_chunks: list[Chunk]) -> None`
+- `navigate_previous() -> None`
+- `navigate_next() -> None`
+- `copy_text() -> None`
+**Dependencies:** None (UI component).
+**Technology Stack:** PySide6 (QDialog with Qt.NonModal flag).
+
+## TokenUsageWidget
+**Responsibility:** Displays current session token usage and costs (Epic 6.6). Shows real-time updates as API calls occur. Provides access to detailed usage history.
+**Key Interfaces:**
+- `update_usage(token_usage: TokenUsage) -> None`
+- `get_session_totals() -> dict`
+- `show_detailed_history() -> None`
+**Dependencies:** `MetadataDBManager` (for TokenUsage queries).
+**Technology Stack:** PySide6 (QWidget).
 
 ## SettingsManager
 **Responsibility:** Manages all application settings and user preferences, including the Zotero data directory path, external API keys, and other configurable options. Ensures secure storage of sensitive data like API keys.

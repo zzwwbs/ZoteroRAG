@@ -14,6 +14,7 @@ N/A - This is a greenfield project. The architecture will be designed from the g
 
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
+| 2025-11-22 | 0.2 | Updated architecture to align with PRD v1.1, incorporating major UI/UX enhancements including a tabbed interface, indexing cancellation, and improved results display. | Winston (Architect) |
 | 2025-11-19 | 0.1 | Initial draft based on PRD v1.0. | Winston (Architect) |
 
 ## High Level Architecture
@@ -232,6 +233,36 @@ class DocumentCollection:
     collection_id: int
 ```
 
+---
+### TokenUsage
+
+**Purpose:** Represents a record of API token consumption for a single operation, enabling transparency and cost tracking for users.
+
+**Key Attributes:**
+*   `timestamp`: `datetime` - When the API call was made.
+*   `operation`: `str` - The type of operation ("embedding" or "analysis").
+*   `tokens_used`: `int` - The number of tokens consumed in this operation.
+*   `model`: `str` - The model used for the operation (e.g., "text-embedding-ada-002", "gpt-4").
+*   `estimated_cost_usd`: `float` - The estimated cost in USD for this operation.
+
+#### Python Dataclass
+```python
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class TokenUsage:
+    timestamp: datetime
+    operation: str  # "embedding" or "analysis"
+    tokens_used: int
+    model: str
+    estimated_cost_usd: float
+```
+
+#### Relationships
+*   Stored as a list in application state for session-based tracking.
+*   Used by the `TokenUsageWidget` component for display.
+
 ## API Specification
 
 ### REST API Specification
@@ -401,19 +432,49 @@ paths:
 ### Component List
 
 ### ZoteroRAG Desk Application (Main UI)
-**Responsibility:** Provides the main graphical user interface, handles user input, displays results, and orchestrates interactions between core services.
+**Responsibility:** Provides the main graphical user interface organized into a task-oriented tabbed layout (Epic 6, Story 6.1). Manages the application lifecycle, orchestrates interactions between core services and UI components, handles background task execution, and maintains application state.
 **Key Interfaces:**
-- User input handling (search queries, button clicks)
-- Display of search results, indexing progress, and application status
-- Navigation to settings and PDF viewer
-**Dependencies:** `ZoteroManager`, `IndexingService`, `SearchService`, `AIService`, `SettingsManager`.
+- `__init__()`: Initializes the main window with `QTabWidget` containing Search, Index, AI Analysis, and Settings tabs
+- `switch_to_tab(tab_name: str)`: Programmatically switches between tabs (e.g., auto-switch to Search after indexing)
+- `launch_chunk_detail_dialog(chunk: Chunk, all_chunks: list[Chunk])`: Opens non-modal chunk detail dialog
+- `update_token_usage(usage: TokenUsage)`: Updates token usage display in status bar and AI Analysis tab
+- Manages `QStackedWidget` for onboarding vs. main tabbed interface
+- Handles user input (search queries, button clicks) from all tabs via signal/slot connections
+- Displays search results, indexing progress, and application status across tabs
+- Manages settings dialog and application preferences
+**Dependencies:** `ZoteroManager`, `IndexingService`, `SearchService`, `AIService`, `SettingsManager`, `ChunkDetailDialog`, `TokenUsageWidget`.
+**Technology Stack:** PySide6.
+
+### ChunkDetailDialog
+**Responsibility:** Displays the full, unabridged text of a selected search result chunk in a non-modal dialog (Epic 6, Story 6.4), allowing for easy reading, navigation between results, and actions without leaving the search context.
+**Key Interfaces:**
+- `show_chunk(chunk: Chunk, chunk_index: int, total_chunks: int)`: Displays the specified chunk with context
+- `navigate_previous()`: Shows the previous chunk in the search results list
+- `navigate_next()`: Shows the next chunk in the search results list
+- `copy_text_to_clipboard()`: Copies the full chunk text to system clipboard
+- `open_source_pdf()`: Opens the source PDF at the chunk's page number
+- Keyboard shortcuts: `←`/`→` for navigation, `Esc` to close, `Ctrl+C` to copy
+**Dependencies:** None (receives data from Main UI via constructor/method calls).
+**Technology Stack:** PySide6.
+
+### TokenUsageWidget
+**Responsibility:** Displays API token consumption and estimated costs for the current session (Epic 6, Story 6.6), providing transparency to users about their API usage and enabling informed budget management.
+**Key Interfaces:**
+- `update_usage(usage: TokenUsage)`: Adds a new token usage record and updates all displays
+- `get_session_totals() -> dict`: Returns aggregated statistics (total tokens, total cost, call counts)
+- `show_detailed_history()`: Opens a dialog with detailed breakdown of all API calls
+- `reset_session_tracking()`: Clears session usage data (e.g., on new indexing operation)
+- Displays: Total tokens consumed, estimated cost (color-coded), breakdown by operation type (embedding/analysis), number of API calls
+**Dependencies:** None (receives `TokenUsage` data from Main UI).
 **Technology Stack:** PySide6.
 
 ### ZoteroManager
-**Responsibility:** Manages all read-only interactions with the user's Zotero database (`zotero.sqlite`) and associated PDF files. This includes detecting the Zotero directory, reading item and collection metadata, and locating PDF paths.
+**Responsibility:** Manages all read-only interactions with the user's Zotero database (`zotero.sqlite`) and associated PDF files. This includes detecting the Zotero directory, reading item and collection metadata with paper counts (Epic 6, Story 6.3), and locating PDF paths.
 **Key Interfaces:**
 - `detect_zotero_directory() -> str`
 - `get_collections() -> list[Collection]`
+- `get_collection_paper_counts() -> dict[str, int]`: Returns mapping of collection IDs to paper counts for display in UI (Story 6.3)
+- `get_total_paper_count() -> int`: Returns total number of papers in the entire library
 - `get_items_in_collection(collection_id) -> list[Document]`
 - `get_all_documents() -> list[Document]`
 - `get_item_pdf_path(document_id) -> str`
@@ -422,11 +483,14 @@ paths:
 **Technology Stack:** Python, PyMuPDF.
 
 ### IndexingService
-**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing and progress reporting.
+**Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, and safe cancellation (Epic 6, Story 6.2).
 **Key Interfaces:**
-- `start_indexing(scope: IndexingScope) -> None`
-- `update_index() -> None`
-- `get_indexing_progress() -> IndexingProgress`
+- `start_indexing(scope: IndexingScope) -> None`: Begins indexing operation in background thread
+- `cancel_indexing() -> None`: Safely requests cancellation of in-progress indexing; sets cancellation flag (Story 6.2)
+- `is_cancellation_requested() -> bool`: Checks if cancellation has been requested
+- `update_index() -> None`: Performs incremental indexing for new/modified documents
+- `get_indexing_progress() -> IndexingProgress`: Returns current progress (processed count, total count, percentage)
+- Emits signals for progress updates and completion/cancellation events
 **Dependencies:** `ZoteroManager`, `ChunkingUtility`, `EmbeddingClient`, `VectorDBManager`, `MetadataDBManager`.
 **Technology Stack:** Python.
 
@@ -438,9 +502,11 @@ paths:
 **Technology Stack:** Python.
 
 ### EmbeddingClient
-**Responsibility:** Handles communication with the external OpenAI-compatible API to generate vector embeddings for text. Manages API requests, authentication (using user-provided key), and error handling for the embedding endpoint.
+**Responsibility:** Handles communication with the external OpenAI-compatible API to generate vector embeddings for text. Manages API requests, authentication, error handling, and tracks token usage for transparency (Epic 6, Story 6.6).
 **Key Interfaces:**
-- `get_embedding(text: str) -> list[float]`
+- `get_embedding(text: str) -> tuple[list[float], TokenUsage]`: Returns embedding vector and token usage record
+- `get_embeddings_batch(texts: list[str]) -> tuple[list[list[float]], TokenUsage]`: Batched embedding generation for efficiency
+- `_calculate_cost(tokens: int, model: str) -> float`: Calculates estimated cost based on current pricing
 **Dependencies:** `SettingsManager`, `requests` (or similar HTTP client).
 **Technology Stack:** Python.
 
@@ -478,9 +544,10 @@ paths:
 **Technology Stack:** Python.
 
 ### AIService
-**Responsibility:** Handles communication with the external OpenAI-compatible API for AI analysis and synthesis of search results. Manages API requests, authentication, and error handling for the chat completions endpoint.
+**Responsibility:** Handles communication with the external OpenAI-compatible API for AI analysis and synthesis of search results. Manages API requests, authentication, error handling, and tracks token usage for transparency (Epic 6, Story 6.6).
 **Key Interfaces:**
-- `analyze_chunks(query: str, chunks: list[Chunk]) -> str`
+- `analyze_chunks(query: str, chunks: list[Chunk]) -> tuple[str, TokenUsage]`: Returns analysis text and token usage record
+- `_calculate_cost(tokens: int, model: str) -> float`: Calculates estimated cost based on current pricing
 **Dependencies:** `SettingsManager`, `requests`.
 **Technology Stack:** Python.
 
@@ -499,28 +566,40 @@ paths:
 ```mermaid
 graph TD
     subgraph User Interface (PySide6)
-        UI[ZoteroRAG Desk App]
+        UI[ZoteroRAG Desk App<br>(Manages Tabs)]
+        SearchTab[Search Tab]
+        IndexTab[Index Tab]
+        AnalysisTab[Analysis Tab]
+        SettingsTab[Settings Tab]
+        ChunkDialog[Chunk Detail Dialog]
+        TokenWidget[Token Usage Widget]
+
+        UI -- Contains --> SearchTab
+        UI -- Contains --> IndexTab
+        UI -- Contains --> AnalysisTab
+        UI -- Contains --> SettingsTab
+        AnalysisTab -- Contains --> TokenWidget
+        SearchTab -- Triggers --> ChunkDialog
     end
 
     subgraph Core Application Logic (Python)
-        UI --> ZoteroManager
-        UI --> IndexingService
-        UI --> SearchService
-        UI --> AIService
-        UI --> SettingsManager
+        UI -- Interacts with --> ZoteroManager
+        UI -- Interacts with --> IndexingService
+        UI -- Interacts with --> SearchService
+        UI -- Interacts with --> AIService
+        UI -- Interacts with --> SettingsManager
 
-        IndexingService --> ZoteroManager
-        IndexingService --> ChunkingUtility
-        IndexingService --> EmbeddingClient
-        IndexingService --> VectorDBManager
-        IndexingService --> MetadataDBManager
+        IndexingService -- Uses --> ZoteroManager
+        IndexingService -- Uses --> ChunkingUtility
+        IndexingService -- Uses --> EmbeddingClient
+        IndexingService -- Uses --> VectorDBManager
+        IndexingService -- Uses --> MetadataDBManager
 
-        SearchService --> EmbeddingClient
-        SearchService --> VectorDBManager
-        SearchService --> MetadataDBManager
+        SearchService -- Uses --> EmbeddingClient
+        SearchService -- Uses --> VectorDBManager
+        SearchService -- Uses --> MetadataDBManager
 
-        AIService --> EmbeddingClient
-        AIService --> SettingsManager
+        AIService -- Uses --> SettingsManager
 
         SettingsManager -- Manages --> OS_Credential_Store[OS Credential Store]
     end
@@ -570,53 +649,48 @@ sequenceDiagram
         SM-->>UI: Path Saved Confirmation
     end
 
-    UI->>User: Displays "Start Indexing" Option
+    UI->>User: Displays "Start Indexing" Option on Index Tab
     User->>UI: Clicks "Start Indexing"
     UI->>IS: start_indexing(scope=ALL_LIBRARY)
     activate IS
 
-    IS->>ZM: get_all_documents()
-    activate ZM
-    ZM->>ZM: Reads zotero.sqlite & Locates PDFs
-    ZM->>ZM: Extracts text from PDFs (PyMuPDF)
-    ZM-->>IS: Returns list of (Document, ExtractedText)
-    deactivate ZM
+    par
+        IS->>ZM: get_all_documents()
+        activate ZM
+        ZM->>ZM: Reads zotero.sqlite & Locates PDFs
+        ZM->>ZM: Extracts text from PDFs (PyMuPDF)
+        ZM-->>IS: Returns list of (Document, ExtractedText)
+        deactivate ZM
 
-    loop For Each Document
-        loop For Each Text Chunk
-            IS->>CU: chunk_text(text, doc_id, page_num)
-            activate CU
-            CU-->>IS: Returns Chunk object
-            deactivate CU
-
-            IS->>EC: get_embedding(chunk.content)
-            activate EC
-            EC->>SM: get_api_key()
-            SM-->>EC: Returns API Key
-            EC->>OAI: POST /v1/embeddings (chunk.content, api_key)
-            activate OAI
-            OAI-->>EC: Returns embedding vector
-            deactivate OAI
-            EC-->>IS: Returns embedding vector
-            deactivate EC
-
-            IS->>MDM: save_chunk(chunk_metadata)
-            activate MDM
-            MDM-->>IS: Chunk Saved Confirmation
-            deactivate MDM
-
-            IS->>VDM: add_vectors([embedding_vector], [chunk.id])
-            activate VDM
-            VDM-->>IS: Vector Added Confirmation
-            deactivate VDM
-
+        loop For Each Document
             IS->>UI: Update Indexing Progress
-        end
-    end
 
-    IS-->>UI: Indexing Complete
-    deactivate IS
-    UI->>User: Displays "Indexing Complete"
+            loop For Each Text Chunk
+                IS->>CU: chunk_text(text, doc_id, page_num)
+                CU-->>IS: Returns Chunk object
+
+                IS->>EC: get_embedding(chunk.content)
+                EC-->>IS: Returns (embedding_vector, token_usage)
+
+                IS->>MDM: save_chunk(chunk_metadata)
+                MDM-->>IS: Chunk Saved Confirmation
+
+                IS->>VDM: add_vectors([embedding_vector], [chunk.id])
+                VDM-->>IS: Vector Added Confirmation
+            end
+        end
+        IS-->>UI: Indexing Complete
+        deactivate IS
+        UI->>User: Displays "Indexing Complete"
+
+    and User can cancel anytime (Epic 6, Story 6.2)
+        User->>UI: Clicks "Cancel Indexing"
+        UI->>IS: cancel_indexing()
+        Note over IS: Cancellation flag is set.<br/>Current item completes, then stops.
+        IS-->>UI: Indexing Cancelled (partial index valid)
+        UI->>User: Displays "Indexing Cancelled"<br/>"Partial index is usable"
+        Note over UI: Button returns to "Start Indexing"
+    end
 ```
 
 ## Database Schema
@@ -685,55 +759,96 @@ CREATE INDEX IF NOT EXISTS idx_doc_collections_collection_id ON document_collect
 
 ### Component Architecture
 
-The UI will be built using a composition of custom `QWidget` classes, each responsible for a specific part of the user interface.
+The UI will be built using a composition of custom `QWidget` classes, organized into a **task-oriented tabbed interface** to improve usability and reduce clutter, as specified in the PRD (3.2, 6.1).
 
 #### Component Organization
-The UI components will be organized into Python modules based on their function:
+The UI components will be organized into Python modules based on their function within the new tabbed structure:
 
 ```plaintext
 src/
 └── ui/
     ├── __init__.py
-    ├── main_window.py      # The main application window, holding the layout
-    ├── search_view.py      # The primary view with search bar and results
-    ├── paper_list_view.py  # Widget to display the list of source papers
-    ├── chunk_list_view.py  # Widget to display the list of text chunks
-    ├── settings_dialog.py  # The dialog for managing application settings
-    ├── onboarding_view.py  # The initial setup/welcome screen
-    └── widgets/            # Reusable custom widgets (e.g., progress bars)
+    ├── main_window.py          # Main application window with QTabWidget (Epic 6.1)
+    ├── search_tab.py           # "Search" tab with search controls and results (Epic 6.5)
+    ├── index_tab.py            # "Index" tab with library and indexing controls (Epic 6.2, 6.3)
+    ├── analysis_tab.py         # "AI Analysis" tab with results and token widget (Epic 6.6)
+    ├── settings_tab.py         # "Settings" tab for app configuration
+    ├── chunk_detail_dialog.py  # Non-modal dialog for full chunk viewing (Epic 6.4)
+    ├── onboarding_view.py      # Initial setup/welcome screen
+    └── widgets/                # Reusable custom widgets
         ├── __init__.py
+        ├── token_usage_widget.py # API token usage display widget (Epic 6.6)
         └── ...
 ```
 
 #### Component Template
-Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to parent widgets or controllers.
+Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to the `MainWindow` controller.
 
 ```python
-# Example: src/ui/search_view.py
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton
+# Example: src/ui/search_tab.py (Epic 6.5 - Repositioned chunk count selector)
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, 
+    QPushButton, QSpinBox, QLabel, QListWidget
+)
 from PySide6.QtCore import Signal
 
-class SearchView(QWidget):
+class SearchTab(QWidget):
     # Signal emitted when the user executes a search
-    search_triggered = Signal(str)
+    search_triggered = Signal(str, int)
+    # Signal emitted when user double-clicks a chunk (Epic 6.4)
+    chunk_detail_requested = Signal(object, int, int)  # chunk, index, total
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.layout = QVBoxLayout(self)
+        
+        # Search controls layout (Epic 6.5 - grouped controls)
+        search_controls_layout = QHBoxLayout()
         self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Enter your search query...")
+        
+        self.results_count_spinner = QSpinBox()
+        self.results_count_spinner.setMinimum(1)
+        self.results_count_spinner.setMaximum(100)
+        self.results_count_spinner.setValue(5)
+        self.results_count_spinner.setToolTip("Number of chunks to retrieve")
+        
         self.search_button = QPushButton("Search")
+        
+        search_controls_layout.addWidget(self.search_bar, stretch=3)
+        search_controls_layout.addWidget(QLabel("Results:"))
+        search_controls_layout.addWidget(self.results_count_spinner)
+        search_controls_layout.addWidget(self.search_button)
 
-        self.layout.addWidget(self.search_bar)
-        self.layout.addWidget(self.search_button)
+        # Add search controls to main layout
+        self.layout.addLayout(search_controls_layout)
+        
+        # Add results views (papers, chunks) to the layout
+        self.layout.addWidget(QLabel("Papers:"))
+        self.paper_list = QListWidget()
+        self.layout.addWidget(self.paper_list)
+        
+        self.layout.addWidget(QLabel("Chunks (double-click for full text):"))  # Epic 6.4
+        self.chunk_list = QListWidget()
+        self.layout.addWidget(self.chunk_list)
 
-        # Connect button click to signal emission
+        # Connect signals
         self.search_button.clicked.connect(self._on_search)
+        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_clicked)  # Epic 6.4
 
     def _on_search(self):
         query = self.search_bar.text()
+        count = self.results_count_spinner.value()
         if query:
-            self.search_triggered.emit(query)
+            self.search_triggered.emit(query, count)
+    
+    def _on_chunk_double_clicked(self, item):
+        # Epic 6.4 - Open chunk detail dialog
+        chunk_index = self.chunk_list.row(item)
+        total_chunks = self.chunk_list.count()
+        chunk_data = item.data(Qt.UserRole)  # Assume chunk stored in item data
+        self.chunk_detail_requested.emit(chunk_data, chunk_index, total_chunks)
 
 ```
 
@@ -748,6 +863,7 @@ A Python `dataclass` will hold the application's shared state.
 # Example: src/ui/state.py
 from dataclasses import dataclass, field
 from typing import Optional, List
+from ..core.data.models import TokenUsage
 
 @dataclass
 class AppState:
@@ -756,6 +872,8 @@ class AppState:
     indexing_progress: float = 0.0
     search_results: List[dict] = field(default_factory=list)
     selected_paper: Optional[dict] = None
+    token_usage_history: List[TokenUsage] = field(default_factory=list)  # Epic 6.6
+    current_session_cost: float = 0.0  # Epic 6.6
     # ... other state variables
 
 # Example: src/config/models.py
@@ -792,49 +910,67 @@ class AppSettings:
     1.  The `MainWindow` will own the state object.
     2.  When a background service (like `IndexingService`) updates the state, it will emit a signal with the new state.
     3.  The `MainWindow` will have a slot connected to this signal. When the slot receives the new state, it updates its `AppState` instance.
-    4.  The `MainWindow` then passes the relevant parts of the state down to child widgets (like `PaperListView` and `ChunkListView`), which then re-render themselves.
+    4.  The `MainWindow` then passes the relevant parts of the state down to child widgets (the active tab), which then re-render themselves.
 
 ### Routing Architecture
 
-"Routing" in this desktop application refers to switching between different views (e.g., onboarding vs. main search interface).
+"Routing" in this desktop application refers to switching between the initial onboarding view and the main tabbed interface.
 
 #### Route Organization
-A `QStackedWidget` in the `MainWindow` will be used to manage different full-screen views.
+A `QStackedWidget` in the `MainWindow` will manage the top-level views (onboarding vs. main tabs). The main interface itself will be a `QTabWidget`.
 
 ```python
 # Example: src/ui/main_window.py
-# ... imports
-from PySide6.QtWidgets import QMainWindow, QStackedWidget
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QTabWidget
 from .onboarding_view import OnboardingView
-from .search_view import SearchView
-from ..config.settings_manager import SettingsManager # Assuming SettingsManager is accessible
+from .search_tab import SearchTab
+from .index_tab import IndexTab
+from .analysis_tab import AnalysisTab
+from .settings_tab import SettingsTab
+from ..config.settings_manager import SettingsManager
 
 class MainWindow(QMainWindow):
     def __init__(self, settings_manager: SettingsManager):
         super().__init__()
-        self.settings = settings_manager # Inject settings manager
+        self.settings = settings_manager
 
         self.stacked_widget = QStackedWidget()
         self.onboarding_view = OnboardingView()
-        self.search_view = SearchView()
+        self.main_tabs = QTabWidget()
+
+        # Create and add tabs
+        self.search_tab = SearchTab()
+        self.index_tab = IndexTab()
+        self.analysis_tab = AnalysisTab()
+        self.settings_tab = SettingsTab()
+
+        self.main_tabs.addTab(self.search_tab, "Search")
+        self.main_tabs.addTab(self.index_tab, "Index")
+        self.main_tabs.addTab(self.analysis_tab, "AI Analysis")
+        self.main_tabs.addTab(self.settings_tab, "Settings")
 
         self.stacked_widget.addWidget(self.onboarding_view)
-        self.stacked_widget.addWidget(self.search_view)
+        self.stacked_widget.addWidget(self.main_tabs)
 
         self.setCentralWidget(self.stacked_widget)
 
-        self.show_onboarding_if_needed()
+        self.show_initial_view()
 
-    def show_onboarding_if_needed(self):
+    def show_initial_view(self):
         # Logic to check if Zotero path is set
-        if not self.settings.get_zotero_path(): # Assuming get_zotero_path() exists
+        if not self.settings.get_zotero_path():
             self.stacked_widget.setCurrentWidget(self.onboarding_view)
         else:
-            self.stacked_widget.setCurrentWidget(self.search_view)
+            self.stacked_widget.setCurrentWidget(self.main_tabs)
+            # Disable search tab until indexing is complete
+            if not self.is_indexing_complete(): # is_indexing_complete is a placeholder
+                self.main_tabs.setCurrentWidget(self.index_tab)
+                self.search_tab.setEnabled(False)
+
 ```
 
 #### "Protected Route" Pattern
-This pattern translates to enabling/disabling UI elements based on application state. For example, the "Analyze with AI" button will be disabled until a valid API key is entered in the settings. This is managed by simple conditional logic in the UI components.
+This pattern translates to enabling/disabling UI elements based on application state. For example, the "Search" tab will be disabled until the initial indexing is complete. The "Analyze with AI" button will be disabled until a valid API key is entered. This is managed by simple conditional logic in the UI components.
 
 ### Frontend Services Layer
 
@@ -844,13 +980,13 @@ This layer is the bridge between the UI components and the core Python logic ser
 UI components will not call services directly. Instead, the `MainWindow` will hold instances of the core services and expose methods for the UI to call. To keep the UI responsive, all long-running service calls will be executed in background threads using `QThreadPool`.
 
 #### Service Example
-This example shows how the `SearchView` can trigger a search, which the `MainWindow` then runs in a background thread.
+This example shows how the `SearchTab` can trigger a search, which the `MainWindow` then runs in a background thread.
 
 ```python
 # In src/ui/main_window.py
-from PySide6.QtCore import QRunnable, QThreadPool, Slot, Signal
-from PySide6.QtWidgets import QMainWindow, QStackedWidget # ... other imports
-from ..core.services.search_service import SearchService # Assuming SearchService is available
+from PySide6.QtCore import QRunnable, QThreadPool, Slot, Signal, QObject
+from PySide6.QtWidgets import QMainWindow
+from ..core.services.search_service import SearchService
 
 # Worker for running a task in the background
 class Worker(QRunnable):
@@ -859,7 +995,7 @@ class Worker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
-        self.signals = WorkerSignals() # Custom signals for worker
+        self.signals = WorkerSignals()
 
     @Slot()
     def run(self):
@@ -877,40 +1013,41 @@ class WorkerSignals(QObject):
     finished = Signal()
 
 class MainWindow(QMainWindow):
+    search_complete = Signal(list)
     # ... (previous __init__ content)
 
     def __init__(self, settings_manager: SettingsManager):
         super().__init__()
+        # ... setup UI and tabs ...
         self.settings = settings_manager
         self.search_service = SearchService(
             # ... inject dependencies for SearchService
-            None, None, None, None # Placeholder for now
         )
         self.thread_pool = QThreadPool()
 
-        # Connect search trigger from SearchView to our handler
-        self.search_view.search_triggered.connect(self.on_search)
+        # Connect search trigger from SearchTab to our handler
+        self.search_tab.search_triggered.connect(self.on_search)
         # Connect our completion signal to a UI update slot
         self.search_complete.connect(self.update_search_results)
 
-    @Slot(str)
-    def on_search(self, query):
+    @Slot(str, int)
+    def on_search(self, query, count):
         # Disable UI elements, show loading indicator
-        worker = Worker(self._execute_search, query)
+        worker = Worker(self._execute_search, query, count)
         worker.signals.result.connect(self.search_complete.emit)
-        worker.signals.error.connect(self.handle_search_error) # Connect error signal
-        worker.signals.finished.connect(self.search_finished) # Connect finished signal
+        worker.signals.error.connect(self.handle_search_error)
+        worker.signals.finished.connect(self.search_finished)
         self.thread_pool.start(worker)
 
-    def _execute_search(self, query):
-        return self.search_service.search(query)
+    def _execute_search(self, query, count):
+        return self.search_service.search(query, k=count)
 
     @Slot(list)
     def update_search_results(self, results):
         # Update AppState and pass results to child widgets
         # Re-enable UI, hide loading indicator
         print(f"Search results received: {len(results)} items")
-        pass
+        self.search_tab.display_results(results) # Example method
 
     @Slot(str)
     def handle_search_error(self, error_message):
@@ -1106,11 +1243,17 @@ zotero-rag-desk/
 │   │   │
 │   │   ├── ui/                 # "Frontend" - PySide6 UI components
 │   │   │   ├── __init__.py
-│   │   │   ├── main_window.py  # Main application window
-│   │   │   ├── search_view.py
-│   │   │   ├── settings_dialog.py
-│   │   │   ├── onboarding_view.py
-│   │   │   └── assets/         # UI assets like icons, images, etc.
+│   │   │   ├── main_window.py          # Main window with QTabWidget (Epic 6.1)
+│   │   │   ├── search_tab.py           # "Search" tab (Epic 6.5 - grouped controls)
+│   │   │   ├── index_tab.py            # "Index" tab (Epic 6.2, 6.3 - cancel, counts)
+│   │   │   ├── analysis_tab.py         # "AI Analysis" tab (Epic 6.6 - token widget)
+│   │   │   ├── settings_tab.py         # "Settings" tab
+│   │   │   ├── chunk_detail_dialog.py  # Non-modal chunk viewer (Epic 6.4)
+│   │   │   ├── onboarding_view.py      # Initial setup screen
+│   │   │   ├── assets/                 # UI assets like icons, images, etc.
+│   │   │   └── widgets/                # Reusable custom widgets
+│   │   │       ├── __init__.py
+│   │   │       └── token_usage_widget.py  # API usage display (Epic 6.6)
 │   │   │
 │   │   └── config/             # Application configuration and settings management
 │   │       ├── __init__.py

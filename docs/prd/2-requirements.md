@@ -11,7 +11,11 @@
 7.  **FR7 (Navigation):** Users must be able to open the full PDF for any search result in the system's default PDF viewer.
 8.  **FR8 (BYOK Analysis):** The application must allow users to optionally provide their own OpenAI-compatible API key to perform in-app synthesis of search results. This feature must be disabled by default.
 9.  **FR9 (Export - Chunks):** The application must provide a "copy to clipboard" function that formats the user's query and the top N search results into a prompt ready for use in external LLMs like ChatGPT.
-10. **FR10 (Export - PDFs):** The application must provide an option to export/copy the actual PDF files from search results to a new user-specified folder.
+1.  **FR10 (Export - PDFs):** The application must provide an option to export/copy the actual PDF files from search results to a new user-specified folder.
+11. **FR11 (Cancel Indexing):** The application must provide a mechanism for the user to cancel an in-progress indexing operation.
+12. **FR12 (Indexing Metadata):** The UI must display the number of papers contained within each Zotero collection and in the entire library to help users estimate indexing scope.
+13. **FR13 (Chunk Readability):** The application must provide a detailed, readable view for a selected search result chunk, showing its full text content and metadata.
+14. **FR14 (API Usage Transparency):** The application must display estimated token usage and costs associated with cloud API calls (for both embedding and AI analysis).
 
 ## 2.2. Non-Functional
 

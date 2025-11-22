@@ -91,6 +91,9 @@ def test_search_success_updates_status_and_calls_service(qapp):
     )
     assert isinstance(window, QMainWindow)
     window._stack.setCurrentWidget(window._main_container)
+    window._handle_indexing_progress(
+        {"status": "complete", "processed_count": 0, "total_count": 0, "current_item_name": None}
+    )
 
     window._search_view._input.setText("deep learning")
     window._search_view._start_button.click()
@@ -109,6 +112,9 @@ def test_search_error_shows_error_message(qapp):
         auto_start=False,
     )
     window._stack.setCurrentWidget(window._main_container)
+    window._handle_indexing_progress(
+        {"status": "complete", "processed_count": 0, "total_count": 0, "current_item_name": None}
+    )
 
     window._search_view._input.setText("fail me")
     window._search_view._start_button.click()

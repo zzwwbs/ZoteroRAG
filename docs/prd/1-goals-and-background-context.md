@@ -19,3 +19,4 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
 | 2025-11-18 | 1.0 | Initial draft based on Project Brief and preliminary PRD. | John (PM) |
+| 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |

@@ -130,3 +130,45 @@ def test_shows_onboarding_when_path_invalid(qapp):
 
     # Should show onboarding view because path is invalid
     assert window._stack.currentWidget() == window._onboarding_view
+
+
+def test_tab_widget_sets_up_four_tabs(qapp):
+    """Main window should initialize four tabs with expected labels."""
+    settings_mgr = FakeSettingsManager(onboarding_completed=True, zotero_path=Path("/tmp/ok"))
+    zotero_mgr = FakeZoteroManager(valid=True)
+
+    window = MainWindow(
+        settings_manager=settings_mgr,
+        zotero_manager=zotero_mgr,
+        search_service=MagicMock(),
+        auto_start=False,
+    )
+
+    assert window._main_tabs.count() == 4
+    assert [window._main_tabs.tabText(i) for i in range(4)] == [
+        "Search",
+        "Index",
+        "AI Analysis",
+        "Settings",
+    ]
+    assert window._main_tabs.isTabEnabled(window._search_tab_index) is False
+
+
+def test_search_tab_enables_after_indexing(qapp):
+    """Search tab should enable and become active when indexing completes."""
+    settings_mgr = FakeSettingsManager(onboarding_completed=True, zotero_path=Path("/tmp/ok"))
+    zotero_mgr = FakeZoteroManager(valid=True)
+
+    window = MainWindow(
+        settings_manager=settings_mgr,
+        zotero_manager=zotero_mgr,
+        search_service=MagicMock(),
+        auto_start=False,
+    )
+
+    window._handle_indexing_progress(
+        {"status": "complete", "processed_count": 0, "total_count": 0, "current_item_name": None}
+    )
+
+    assert window._main_tabs.isTabEnabled(window._search_tab_index) is True
+    assert window._main_tabs.currentWidget() == window.search_tab

@@ -21,6 +21,7 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
 | 2025-11-18 | 1.0 | Initial draft based on Project Brief and preliminary PRD. | John (PM) |
+| 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |
 
 ## 2. Requirements
 
@@ -36,6 +37,10 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 8.  **FR8 (BYOK Analysis):** The application must allow users to optionally provide their own OpenAI-compatible API key to perform in-app synthesis of search results. This feature must be disabled by default.
 9.  **FR9 (Export - Chunks):** The application must provide a "copy to clipboard" function that formats the user's query and the top N search results into a prompt ready for use in external LLMs like ChatGPT.
 10. **FR10 (Export - PDFs):** The application must provide an option to export/copy the actual PDF files from search results to a new user-specified folder.
+11. **FR11 (Cancel Indexing):** The application must provide a mechanism for the user to cancel an in-progress indexing operation.
+12. **FR12 (Indexing Metadata):** The UI must display the number of papers contained within each Zotero collection and in the entire library to help users estimate indexing scope.
+13. **FR13 (Chunk Readability):** The application must provide a detailed, readable view for a selected search result chunk, showing its full text content and metadata.
+14. **FR14 (API Usage Transparency):** The application must display estimated token usage and costs associated with cloud API calls (for both embedding and AI analysis).
 
 ### 2.2. Non-Functional
 
@@ -54,25 +59,42 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 
 ### 3.1. Overall UX Vision
 
-The user experience should be clean, direct, and trustworthy. The application should feel like a powerful utility that respects the user's focus and workflow. The core design principle is to minimize friction between the user's question and the relevant insights within their library. The interface should be simple enough to be used immediately without a tutorial, yet provide access to powerful features for those who need them.
+The user experience should be clean, direct, and trustworthy. The application should feel like a powerful utility that respects the user's focus and workflow, especially on screens with limited real estate. The core design principle is to minimize friction and scrolling by organizing tasks into logical, focused views. The interface should be simple enough to be used immediately, yet provide access to powerful features for those who need them.
 
 ### 3.2. Key Interaction Paradigms
 
-The primary interaction will be a familiar search-and-browse model:
+The primary interaction model is being updated from a single, scrollable view to a **task-oriented tabbed interface** to improve usability and reduce clutter.
 
-1.  **A Central Search Bar:** A persistent, prominent search bar for entering natural language queries.
-2.  **A Split-Pane Results View:** A two-panel layout to display results. One panel will list the source papers, and the other will show the specific text chunks from the selected paper. This allows for easy context switching between a high-level overview and detailed snippets.
-3.  **Modal/Separate Screen for Settings:** Configuration options (like API keys and Zotero path) will be handled in a dedicated settings window to keep the main search interface uncluttered.
+1.  **Tab-Based Main Window:** The main application window will use a `QTabWidget` to separate primary functions into distinct tabs. This prevents overcrowding and allows for a more focused workflow.
+2.  **Centralized Search Controls:** The search bar and its related controls (like the number of chunks to retrieve) will be grouped together for intuitive access.
+3.  **Enhanced Results Readability:** Search results (chunks) will have an improved preview format and a dedicated, non-modal dialog for reading full content without leaving the main application context.
+4.  **Clear Action Buttons:** Buttons for primary actions like "Start Indexing" will provide clear visual feedback, changing state to "Cancel Indexing" during operation.
 
 ### 3.3. Core Screens and Views
 
-1.  **Onboarding / Setup Screen:** A simple, one-time screen to detect or set the Zotero library path and initiate the first-time indexing. It must clearly communicate the read-only nature of the app and its use of cloud services.
-2.  **Main Search View:** The primary screen of the application, featuring the search bar and the split-pane view for papers and chunks. This view will also contain the main action buttons ("Analyze with BYOK", "Export for ChatGPT").
-3.  **Settings Screen:** A separate window for managing the Zotero path, API keys, and other application settings.
+The application's UI will be organized into the following tabs:
+
+1.  **Search Tab:** This is the primary landing tab after indexing is complete. It will contain:
+    *   The main search input bar and chunk count selector.
+    *   The split-pane view for displaying "Papers" and "Chunks" from search results.
+    *   The "Analyze with AI" button to trigger analysis.
+2.  **Index Tab:** This tab is focused on library management and indexing. It will contain:
+    *   The Zotero library overview.
+    *   The indexing scope selector (Entire Library vs. Collections), which will display the number of papers for each option.
+    *   The "Start/Cancel Indexing" button and progress indicators.
+3.  **AI Analysis Tab:** This tab is dedicated to displaying the results of AI synthesis. It will contain:
+    *   The full, synthesized answer from the LLM.
+    *   The new API token usage widget, providing transparency on costs and consumption.
+4.  **Settings Tab:** A dedicated, uncluttered space for all application settings, including Zotero path, API keys, and other future configuration options.
+5.  **Chunk Detail View (Non-Modal Dialog):** Triggered by a double-click on a chunk in the search results. This dialog will:
+    *   Display the full, formatted text of the chunk.
+    *   Show detailed metadata (document title, page number, relevance score).
+    *   Provide navigation to the previous/next chunk in the results list.
+    *   Offer actions like "Copy Text" and "Open PDF".
 
 ### 3.4. Accessibility: WCAG AA
 
-The application should adhere to WCAG 2.1 AA standards to ensure it is usable by people with a wide range of disabilities. This includes considerations for color contrast, keyboard navigation, and screen reader compatibility.
+The application should adhere to WCAG 2.1 AA standards to ensure it is usable by people with a wide range of disabilities. This includes considerations for color contrast, keyboard navigation (including tab navigation and shortcuts in the chunk detail view), and screen reader compatibility.
 
 ### 3.5. Branding
 
@@ -80,7 +102,7 @@ The branding should be minimal and professional, suitable for an academic tool. 
 
 ### 3.6. Target Device and Platforms: Cross-Platform
 
-The application will be a standalone desktop application with consistent functionality across Windows, macOS, and Linux.
+The application will be a standalone desktop application with consistent functionality across Windows, macOS, and Linux. The new tabbed design is specifically intended to improve usability on lower-resolution screens (e.g., 1366x768).
 
 ## 4. Technical Assumptions
 
@@ -115,6 +137,7 @@ Testing will include both unit tests for individual components and integration t
 *   **Epic 3: Semantic Search & Results Display:** Develop the natural language query processing, retrieval from the local vector store, and the UI for displaying relevant chunks and source papers, delivering the core semantic search functionality.
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
 *   **Epic 5: Application Hardening & User Experience:** Focus on robust error handling, secure API key management, comprehensive settings, and packaging for cross-platform deployment, ensuring the application is reliable, secure, and user-friendly for release.
+*   **Epic 6: UI/UX Enhancements & Usability Polish:** Implement significant UI/UX improvements based on user feedback, including a tab-based interface, indexing cancellation, improved data visibility, and enhanced result readability.
 
 ## 5.1. Out of Scope for MVP
 
@@ -510,3 +533,94 @@ You are the UX Expert. Your task is to create the UI/UX architecture for the Zot
 ### 8.2. Architect Prompt
 
 You are the Architect. Your task is to create the technical architecture for the ZoteroRAG Desk application. This complete and approved Product Requirements Document (PRD) is your primary source of truth. Your architecture must satisfy all functional and non-functional requirements, adhere to the technical assumptions, and provide a clear implementation plan for the epics and stories defined within. Produce an `architecture.md` document as your primary deliverable.
+
+### Epic 6: UI/UX Enhancements & Usability Polish
+
+#### Expanded Goal:
+
+This epic addresses critical usability issues identified after the initial MVP release, based on direct user feedback. The goal is to significantly improve the user experience by reorganizing the UI for clarity, providing users with more control and feedback, and increasing transparency. These changes will make the application more intuitive, efficient, and trustworthy, especially for users on low-resolution screens or with large libraries.
+
+#### Story 6.1: Implement Tab-Based Interface
+
+As a **user**,
+I want the **application's functions to be organized into separate tabs**,
+so that **the interface is less cluttered and I can focus on one task at a time**.
+
+##### Acceptance Criteria
+
+1.  6.1.1: The main window is organized into a `QTabWidget` with four tabs: "Search", "Index", "AI Analysis", and "Settings".
+2.  6.1.2: The "Search" tab contains the search bar, results views (papers and chunks), and the "Analyze with AI" button.
+3.  6.1.3: The "Index" tab contains the Zotero library view, indexing scope controls, and the "Start/Cancel Indexing" button.
+4.  6.1.4: The "AI Analysis" tab contains the view for displaying synthesized AI results and the token usage widget.
+5.  6.1.5: The "Settings" tab is present as a placeholder for future application settings.
+6.  6.1.6: The "Search" tab is disabled until the initial library indexing is complete.
+7.  6.1.7: After a successful indexing operation, the UI automatically switches focus to the "Search" tab.
+
+#### Story 6.2: Add Indexing Cancellation
+
+As a **user with a large library**,
+I want to be able to **cancel an ongoing indexing process**,
+so that **I don't have to force-quit the application if I start a long operation by mistake**.
+
+##### Acceptance Criteria
+
+1.  6.2.1: When indexing begins, the "Start Indexing" button changes to a "Cancel Indexing" button with a distinct visual style (e.g., red background).
+2.  6.2.2: Clicking the "Cancel Indexing" button requests a safe stop of the indexing worker thread.
+3.  6.2.3: The indexing process stops gracefully after completing the current in-flight item.
+4.  6.2.4: The UI provides feedback that the cancellation is in progress and confirms when it is complete.
+5.  6.2.5: The index remains in a valid, usable state, containing all items that were successfully processed before the cancellation.
+
+#### Story 6.3: Display Collection Paper Counts
+
+As a **user**,
+I want to **see the number of papers in each Zotero collection before I start indexing**,
+so that **I can make an informed decision about the scope of the indexing job**.
+
+##### Acceptance Criteria
+
+1.  6.3.1: The "Entire Library" radio button in the Index tab displays the total number of papers (e.g., "Entire Library (1234 papers)").
+2.  6.3.2: The collections dropdown list displays the paper count next to each collection's name (e.g., "Cognitive Psychology (87 papers)").
+3.  6.3.3: The counts are retrieved via an efficient database query.
+4.  6.3.4: Collections with zero papers are clearly marked (e.g., "History of Science (0 papers)").
+
+#### Story 6.4: Implement Non-Modal Chunk Detail Dialog
+
+As a **user**,
+I want to **view the full text of a search result chunk in a larger, more readable format**,
+so that **I can evaluate its relevance without having to open the full PDF**.
+
+##### Acceptance Criteria
+
+1.  6.4.1: Double-clicking a chunk in the search results list opens a non-modal "Chunk Details" dialog.
+2.  6.4.2: The dialog displays the full, unabridged text of the selected chunk in a scrollable text area.
+3.  6.4.3: The dialog header shows the source document's title, and sub-headings show metadata like page number and relevance score.
+4.  6.4.4: The dialog includes "Previous" and "Next" buttons (and keyboard shortcuts `←`/`→`) to navigate through the list of result chunks without closing the dialog.
+5.  6.4.5: The dialog includes buttons to "Copy Text" and "Open PDF".
+
+#### Story 6.5: Reposition Chunk Count Selector
+
+As a **user**,
+I want the **control for selecting the number of search results to be located next to the search button**,
+so that **it is easily discoverable and I can adjust it as I refine my search**.
+
+##### Acceptance Criteria
+
+1.  6.5.1: The `QSpinBox` for selecting the number of chunks to retrieve is removed from its old location.
+2.  6.5.2: The `QSpinBox` is positioned on the same row as the main search input field and search button.
+3.  6.5.3: A label "Results:" is placed next to the spin box to clarify its purpose.
+4.  6.5.4: The search function correctly uses the value from the newly positioned spin box.
+
+#### Story 6.6: Add API Token Usage Transparency
+
+As a **user providing my own API key**,
+I want to **see how many tokens are being used and the estimated cost**,
+so that **I can manage my budget and trust the application's usage of the API**.
+
+##### Acceptance Criteria
+
+1.  6.6.1: All API calls (for embedding and AI analysis) record the number of tokens used.
+2.  6.6.2: A `TokenUsageWidget` is added to the "AI Analysis" tab.
+3.  6.6.3: The widget displays the total tokens consumed and the estimated cost in USD for the current session.
+4.  6.6.4: The widget provides a breakdown of API calls by type (e.g., "Embedding Calls", "AI Analysis Calls").
+5.  6.6.5: A persistent counter in the main window's status bar shows the running total estimated cost for the session.
+6.  6.6.6: A clear disclaimer is included, stating that costs are estimates.

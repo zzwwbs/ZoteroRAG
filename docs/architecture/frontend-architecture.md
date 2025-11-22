@@ -11,13 +11,17 @@ The UI components will be organized into Python modules based on their function:
 src/
 └── ui/
     ├── __init__.py
-    ├── main_window.py      # The main application window, holding the layout
-    ├── search_view.py      # The primary view with search bar and results
-    ├── paper_list_view.py  # Widget to display the list of source papers
-    ├── chunk_list_view.py  # Widget to display the list of text chunks
-    ├── settings_dialog.py  # The dialog for managing application settings
-    ├── onboarding_view.py  # The initial setup/welcome screen
-    └── widgets/            # Reusable custom widgets (e.g., progress bars)
+    ├── main_window.py          # The main application window with QTabWidget (Epic 6.1)
+    ├── search_tab.py           # Search tab with search bar and results (Epic 6.1, 6.5)
+    ├── index_tab.py            # Index management tab (Epic 6.1, 6.2)
+    ├── ai_analysis_tab.py      # AI analysis tab (Epic 6.1)
+    ├── settings_tab.py         # Settings tab (Epic 6.1)
+    ├── paper_list_view.py      # Widget to display the list of source papers
+    ├── chunk_list_view.py      # Widget to display the list of text chunks
+    ├── chunk_detail_dialog.py  # Non-modal chunk detail dialog (Epic 6.4)
+    ├── token_usage_widget.py   # Token usage display widget (Epic 6.6)
+    ├── onboarding_view.py      # The initial setup/welcome screen
+    └── widgets/                # Reusable custom widgets (e.g., progress bars)
         ├── __init__.py
         └── ...
 ```
@@ -26,31 +30,60 @@ src/
 Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to parent widgets or controllers.
 
 ```python
-# Example: src/ui/search_view.py
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton
+# Example: src/ui/search_tab.py (Epic 6.1, 6.4, 6.5)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSpinBox, QLabel
 from PySide6.QtCore import Signal
+from .chunk_detail_dialog import ChunkDetailDialog
 
-class SearchView(QWidget):
+class SearchTab(QWidget):
     # Signal emitted when the user executes a search
-    search_triggered = Signal(str)
+    search_triggered = Signal(str, int)  # query, k_value
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.layout = QVBoxLayout(self)
+        
+        # Search controls grouped together (Epic 6.5)
+        search_controls = QHBoxLayout()
         self.search_bar = QLineEdit()
         self.search_button = QPushButton("Search")
-
-        self.layout.addWidget(self.search_bar)
-        self.layout.addWidget(self.search_button)
-
-        # Connect button click to signal emission
+        self.k_label = QLabel("Results:")
+        self.k_spinbox = QSpinBox()
+        self.k_spinbox.setRange(1, 100)
+        self.k_spinbox.setValue(50)
+        
+        search_controls.addWidget(self.search_bar)
+        search_controls.addWidget(self.k_label)
+        search_controls.addWidget(self.k_spinbox)
+        search_controls.addWidget(self.search_button)
+        
+        self.layout.addLayout(search_controls)
+        
+        # Results list (Epic 6.4: double-click opens dialog)
+        self.chunk_list = ChunkListView()
+        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_click)
+        self.layout.addWidget(self.chunk_list)
+        
+        # Connect search button
         self.search_button.clicked.connect(self._on_search)
+        
+        # Non-modal dialog reference (Epic 6.4)
+        self.chunk_detail_dialog = None
 
     def _on_search(self):
         query = self.search_bar.text()
+        k = self.k_spinbox.value()
         if query:
-            self.search_triggered.emit(query)
+            self.search_triggered.emit(query, k)
+    
+    def _on_chunk_double_click(self, item):
+        # Epic 6.4: Launch non-modal chunk detail dialog
+        chunk = item.data(Qt.UserRole)  # Assuming chunk stored as item data
+        if not self.chunk_detail_dialog:
+            self.chunk_detail_dialog = ChunkDetailDialog(self)
+        self.chunk_detail_dialog.show_chunk(chunk, self.chunk_list.get_all_chunks())
+        self.chunk_detail_dialog.show()
 
 ```
 
@@ -73,6 +106,9 @@ class AppState:
     indexing_progress: float = 0.0
     search_results: List[dict] = field(default_factory=list)
     selected_paper: Optional[dict] = None
+    collection_paper_counts: dict[int, int] = field(default_factory=dict)  # Epic 6.3
+    token_usage_history: List[TokenUsage] = field(default_factory=list)  # Epic 6.6
+    current_session_cost: float = 0.0  # Epic 6.6
     # ... other state variables
 
 # Example: src/config/models.py

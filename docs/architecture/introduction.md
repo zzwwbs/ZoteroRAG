@@ -13,3 +13,4 @@ N/A - This is a greenfield project. The architecture will be designed from the g
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
 | 2025-11-19 | 0.1 | Initial draft based on PRD v1.0. | Winston (Architect) |
+| 2025-11-22 | 0.2 | Updated for Epic 6 UX enhancements: tab-based UI, indexing cancellation, collection counts, chunk detail dialog, repositioned controls, token usage tracking. | Winston (Architect) |
