@@ -23,6 +23,7 @@ class IndexingScopeView(QWidget):
     """Widget that lets the user choose which part of their library to index."""
 
     scope_selected = Signal(dict)
+    cancel_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -33,12 +34,13 @@ class IndexingScopeView(QWidget):
         self._start_button = QPushButton("Start Indexing")
         self._status_label = QLabel("")
         self._busy = False
+        self._cancel_mode = False
 
         self._entire_radio.setChecked(True)
         self._collection_combo.setEnabled(False)
 
         self._collection_radio.toggled.connect(self._handle_collection_toggle)
-        self._start_button.clicked.connect(self._emit_scope)
+        self._start_button.clicked.connect(self._handle_start_or_cancel)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("<b>Indexing Scope</b>"))
@@ -75,7 +77,7 @@ class IndexingScopeView(QWidget):
         """Enable/disable user interaction while indexing runs."""
 
         self._busy = busy
-        self._start_button.setEnabled(not busy)
+        self._start_button.setEnabled((not busy) or self._cancel_mode)
         self._entire_radio.setEnabled(not busy)
         self._update_collection_controls()
 
@@ -86,13 +88,49 @@ class IndexingScopeView(QWidget):
         current = payload.get("current_item_name") or ""
         if status == "complete":
             message = "Indexing complete."
+            self.set_idle_mode()
+        elif status == "cancelled":
+            message = "Indexing cancelled."
+            self.set_idle_mode()
         elif status == "error":
             message = f"Error: {payload.get('error_message')}"
+            self.set_idle_mode()
         elif status == "skipped":
             message = f"Skipped {current} ({processed}/{total})."
         else:
             message = f"Indexing {current} ({processed}/{total})..."
         self._status_label.setText(message)
+
+    def set_cancel_mode(self) -> None:
+        """Switch button to a cancel affordance."""
+        self._cancel_mode = True
+        self._start_button.setText("Cancel Indexing")
+        self._start_button.setStyleSheet("background-color: red; color: white;")
+        self._start_button.setEnabled(True)
+
+    def set_cancelling_mode(self) -> None:
+        """Show cancellation in progress."""
+        self._cancel_mode = True
+        self._start_button.setText("Cancelling...")
+        self._start_button.setEnabled(False)
+
+    def set_idle_mode(self) -> None:
+        """Restore start state after completion or cancellation."""
+        self._cancel_mode = False
+        self._start_button.setText("Start Indexing")
+        self._start_button.setStyleSheet("")
+        self.set_busy(False)
+
+    def set_status_message(self, message: str) -> None:
+        self._status_label.setText(message)
+
+    def _handle_start_or_cancel(self) -> None:
+        if self._cancel_mode:
+            self.cancel_requested.emit()
+            self.set_cancelling_mode()
+            self._status_label.setText("Cancelling...")
+            return
+        self._emit_scope()
 
     def _emit_scope(self) -> None:
         if self._entire_radio.isChecked():

@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
             embedding_client=self._embedding_client,
         )
         self._state = AppState()
+        self._cancel_requested = False
 
         self._stack = QStackedWidget()
         self.setCentralWidget(self._stack)
@@ -113,7 +114,8 @@ class MainWindow(QMainWindow):
         self.index_tab = IndexTab()
         self._library_view = self.index_tab.library_view
         self._indexing_scope_view = self.index_tab.indexing_scope_view
-        self._indexing_scope_view.scope_selected.connect(self._start_indexing_task)
+        self.index_tab.start_indexing.connect(self._start_indexing_task)
+        self.index_tab.cancel_indexing.connect(self._cancel_indexing_task)
 
         self.analysis_tab = AnalysisTab()
         self._analysis_label = self.analysis_tab.analysis_label
@@ -253,17 +255,37 @@ class MainWindow(QMainWindow):
 
     def _start_indexing_task(self, scope: dict) -> None:
         self._set_search_tab_enabled(False)
+        self._cancel_requested = False
+        self.index_tab.show_indexing_active()
         worker = _IndexingRunnable(self._indexing_service, scope)
         worker.signals.progress.connect(self._handle_indexing_progress)
-        worker.signals.finished.connect(lambda: self._indexing_scope_view.set_busy(False))
+        worker.signals.finished.connect(self._handle_indexing_finished)
         self._indexing_scope_view.set_busy(True)
         self._thread_pool.start(worker)
 
+    def _cancel_indexing_task(self) -> None:
+        self._indexing_service.cancel_indexing()
+        self._cancel_requested = True
+        self.index_tab.show_cancelling()
+        self._indexing_scope_view.set_status_message("Cancelling...")
+
     def _handle_indexing_progress(self, payload: dict) -> None:
         self._indexing_scope_view.update_progress(payload)
-        if payload.get("status") == "complete":
+        status = payload.get("status")
+        if status == "complete":
             self._set_search_tab_enabled(True)
             self._main_tabs.setCurrentWidget(self.search_tab)
+            self._cancel_requested = False
+        elif status == "processing" and not self._cancel_requested:
+            self.index_tab.show_indexing_active()
+        elif status in {"cancelled", "error"}:
+            self._cancel_requested = False
+            self.index_tab.show_idle()
+
+    def _handle_indexing_finished(self) -> None:
+        self._cancel_requested = False
+        self._indexing_scope_view.set_busy(False)
+        self.index_tab.show_idle()
 
     def _on_search(self, query: str) -> None:
         worker = _SearchRunnable(self._search_service, query)

@@ -152,3 +152,37 @@ def test_indexing_service_skips_previously_indexed_items():
     service.start_indexing({"type": "all"})
     # Should not add new vectors since item skipped
     assert not vector_manager.added
+
+
+def test_indexing_service_cancels_after_current_item():
+    items = [
+        ZoteroItem(item_id=1, item_key="AAA", title="Doc A", authors="Author One", year="2022"),
+        ZoteroItem(item_id=2, item_key="BBB", title="Doc B", authors="Author Two", year="2023"),
+    ]
+    attachments = {1: [Path("doc1.pdf")], 2: [Path("doc2.pdf")]}
+    metadata = DummyMetadataManager()
+    vector_manager = DummyVectorManager()
+    embedding_client = DummyEmbeddingClient()
+    manager = DummyZoteroManager(items, attachments)
+    service = IndexingService(
+        manager,
+        metadata_manager=metadata,
+        vector_manager=vector_manager,
+        embedding_client=embedding_client,
+        pdf_extractor=dummy_pdf_extractor,
+        chunker=dummy_chunker,
+    )
+
+    progress_events: list[dict] = []
+
+    def progress(payload: dict) -> None:
+        progress_events.append(payload.copy())
+        if payload.get("processed_count") == 1:
+            service.cancel_indexing()
+
+    service.set_progress_callback(progress)
+    service.start_indexing({"type": "all"})
+
+    assert len(embedding_client.requests) == 1
+    assert progress_events[-1]["status"] == "cancelled"
+    assert vector_manager.saved

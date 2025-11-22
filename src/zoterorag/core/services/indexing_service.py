@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List
+import threading
 
 from ..data.models import Chunk, Document
 from ..utils.chunking_utility import chunk_text
@@ -42,6 +43,7 @@ class IndexingService:
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
         self._progress_callback: Callable[[Dict[str, Any]], None] | None = None
+        self._cancel_event = threading.Event()
 
         self._metadata_manager.initialize_database()
         try:
@@ -51,6 +53,11 @@ class IndexingService:
 
     def set_progress_callback(self, callback: Callable[[Dict[str, Any]], None] | None) -> None:
         self._progress_callback = callback
+
+    def cancel_indexing(self) -> None:
+        """Signal the current indexing run to stop after the current item."""
+
+        self._cancel_event.set()
 
     def extract_text_for_items(self, item_ids: Iterable[int]) -> Dict[int, str]:
         """Return extracted text for each item by visiting its PDF attachments."""
@@ -74,6 +81,7 @@ class IndexingService:
     def start_indexing(self, scope: Dict[str, Any]) -> None:
         """Kick off the indexing pipeline for the selected scope."""
 
+        self._cancel_event.clear()
         items = self._zotero_manager.get_items_for_scope(scope)
         total = len(items)
         processed = 0
@@ -89,6 +97,8 @@ class IndexingService:
         )
 
         for item in items:
+            if self._cancel_event.is_set():
+                break
             processed += 1
             payload = {
                 "status": "processing",
@@ -115,21 +125,25 @@ class IndexingService:
                 payload["status"] = "error"
                 payload["error_message"] = str(error)
                 self._emit_progress(payload)
+            if self._cancel_event.is_set():
+                break
 
         try:
             self._vector_manager.save_index()
         except RuntimeError as error:
             logger.error("Failed to save vector index: %s", error)
 
+        final_status = "cancelled" if self._cancel_event.is_set() else "complete"
         self._emit_progress(
             {
-                "status": "complete",
+                "status": final_status,
                 "processed_count": processed,
                 "total_count": total,
                 "current_item_name": None,
                 "error_message": None,
             }
         )
+        self._cancel_event.clear()
 
     def _process_item(self, item: ZoteroItem, embedding_client: EmbeddingClient) -> None:
         pdf_paths = self._zotero_manager.get_pdf_attachments(item.item_id)
