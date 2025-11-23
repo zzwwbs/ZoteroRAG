@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget, QHBoxLayout
 
 from .chunk_list_view import ChunkListView
 from .chunk_detail_dialog import ChunkDetailDialog
@@ -25,10 +25,17 @@ class SearchTab(QWidget):
 
         self.chunk_count = self.search_view.result_count
 
+        buttons_row = QHBoxLayout()
+        buttons_row.addStretch()
+        buttons_row.addWidget(self.search_view._export_button)
+        buttons_row.addWidget(self.search_view._copy_button)
+        buttons_row.addStretch()
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.search_view)
         layout.addWidget(self.paper_list_view)
         layout.addWidget(self.chunk_list_view)
+        layout.addLayout(buttons_row)
         layout.addStretch()
 
         self.chunk_list_view.chunk_activated.connect(self._on_chunk_activated)

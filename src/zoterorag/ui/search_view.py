@@ -41,8 +41,8 @@ class SearchView(QWidget):
         self._start_button.setAccessibleName("Start search")
         self._start_button.clicked.connect(self._emit_search)
 
-        self._copy_button = QPushButton("Copy to ChatGPT")
-        self._copy_button.setAccessibleName("Copy to ChatGPT")
+        self._copy_button = QPushButton("Copy as Prompt")
+        self._copy_button.setAccessibleName("Copy as Prompt")
         self._copy_button.clicked.connect(self.copy_to_chatgpt_requested.emit)
 
         self._export_button = QPushButton("Export PDFs")

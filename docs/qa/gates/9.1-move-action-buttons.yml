@@ -1,0 +1,170 @@
+schema: 1
+story: '9.1'
+story_title: 'Move Action Buttons to Bottom of Search Tab & Rename Copy Button'
+gate: PASS
+status_reason: 'Excellent UI refactoring. All buttons relocated successfully, renamed correctly, with comprehensive test coverage. User confirmed visual appearance and functionality.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-11-23T22:00:00Z'
+
+top_issues: []
+
+waiver:
+  active: false
+
+quality_score: 94
+expires: '2025-12-07T22:00:00Z'
+
+evidence:
+  tests_reviewed: 7
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+
+acceptance_criteria:
+  ac1_buttons_moved:
+    status: PASS
+    notes: 'Buttons successfully relocated to bottom in horizontal row: "Export PDFs" | "Copy as Prompt". Centered alignment with proper spacing.'
+    evidence: 'Code: search_tab.py lines 25-29. Test: test_action_buttons_at_bottom_of_search_tab validates relocation. Screenshot confirms visual placement.'
+  
+  ac2_button_renamed:
+    status: PASS
+    notes: '"Copy to ChatGPT" renamed to "Copy as Prompt". Accessible name also updated.'
+    evidence: 'Code: search_view.py lines 42-43. Test: test_copy_button_renamed_to_copy_as_prompt validates text.'
+  
+  ac3_layout_spacing:
+    status: PASS
+    notes: 'Appropriate spacing with centered alignment using stretch items. Clean visual separation from content.'
+    evidence: 'Code: addStretch() used for centering. Test: test_buttons_have_proper_spacing validates layout. Screenshot confirms spacing.'
+  
+  ac4_button_states:
+    status: PASS
+    notes: 'Enabled/disabled logic preserved. SearchView set_busy() method controls states correctly.'
+    evidence: 'Code: search_view.py lines 83-93. Test: test_buttons_start_disabled_when_no_search_results validates. Manual testing confirmed.'
+  
+  ac5_functionality:
+    status: PASS
+    notes: 'All button functionality preserved. Signals emit correctly, handlers connected.'
+    evidence: 'Test: test_export_button_signal_connection and test_copy_button_signal_connection validate. User confirmed manual testing.'
+  
+  ac6_visual_design:
+    status: PASS
+    notes: 'Consistent with app theme. Professional appearance with proper button styling.'
+    evidence: 'Screenshot confirms visual design. Test: test_buttons_visual_consistency validates QPushButton types and accessible names.'
+
+nfr_validation:
+  _assessed: [usability, maintainability]
+  
+  usability:
+    status: PASS
+    notes: 'Excellent UX improvements. Cleaner interface, better visual organization, clearer button labels. User confirmed appearance.'
+  
+  maintainability:
+    status: PASS
+    notes: 'Clean implementation. Minimal code changes focused on layout. All signal connections preserved. Easy to understand and modify.'
+
+test_results:
+  ui_tests:
+    - name: 'test_action_buttons_at_bottom_of_search_tab'
+      status: PASS
+      coverage: 'Validates AC1: Buttons relocated to bottom in horizontal row'
+    
+    - name: 'test_copy_button_renamed_to_copy_as_prompt'
+      status: PASS
+      coverage: 'Validates AC2: Button text and accessible name changed to "Copy as Prompt"'
+    
+    - name: 'test_buttons_have_proper_spacing'
+      status: PASS
+      coverage: 'Validates AC3: Layout has stretch items for proper spacing/alignment'
+    
+    - name: 'test_export_button_signal_connection'
+      status: PASS
+      coverage: 'Validates AC5: Export PDFs button signal connection preserved'
+    
+    - name: 'test_copy_button_signal_connection'
+      status: PASS
+      coverage: 'Validates AC5: Copy as Prompt button signal connection preserved'
+    
+    - name: 'test_buttons_start_disabled_when_no_search_results'
+      status: PASS
+      coverage: 'Validates AC4: Button state management logic exists'
+    
+    - name: 'test_buttons_visual_consistency'
+      status: PASS
+      coverage: 'Validates AC6: QPushButton types, accessible names correct'
+  
+  total_tests: 7
+  passing: 7
+  coverage_percentage: 100
+
+implementation_notes:
+  type: 'UI Layout Refactoring'
+  changes_summary: 'Relocated action buttons from SearchView top row to SearchTab bottom layout. Renamed copy button for clarity.'
+  code_impact: 'Minimal changes - focused on layout reorganization'
+  files_modified:
+    - 'src/zoterorag/ui/search_tab.py: Added bottom button layout'
+    - 'src/zoterorag/ui/search_view.py: Button text updated to "Copy as Prompt"'
+  files_added:
+    - 'tests/ui/test_story_9_1_button_relocation.py: Comprehensive test suite (159 lines)'
+
+ux_improvements:
+  cleaner_interface:
+    description: 'Search input area cleaner with action buttons moved to bottom'
+    benefit: 'Better focus on primary search functionality'
+  
+  logical_grouping:
+    description: 'Action buttons grouped with search results at bottom'
+    benefit: 'More intuitive - actions near the content they act upon'
+  
+  clearer_labels:
+    description: '"Copy as Prompt" more descriptive than "Copy to ChatGPT"'
+    benefit: 'Users understand button function without ChatGPT branding'
+  
+  visual_balance:
+    description: 'Centered button placement creates visual harmony'
+    benefit: 'Professional appearance, less cluttered'
+
+story_clarification:
+  note: 'Story mentioned "Open in Zotero" button but this does not exist in the application. Actual implementation uses "Export PDFs" and "Copy as Prompt" buttons which match user requirements and screenshot.'
+
+recommendations:
+  immediate: []
+  
+  future:
+    - action: 'Consider adding tooltip text to buttons for additional context'
+      priority: 'low'
+      rationale: 'Would enhance accessibility and user guidance'
+    
+    - action: 'Consider MainWindow integration tests'
+      priority: 'low'
+      rationale: 'Current tests validate SearchTab/SearchView in isolation. Integration tests would validate full signal flow to MainWindow handlers.'
+
+architecture_assessment:
+  design_quality: EXCELLENT
+  notes: |
+    - Clean separation: SearchView owns buttons, SearchTab owns bottom layout
+    - Proper Qt widget composition patterns
+    - Signal-based architecture preserved
+    - No breaking changes to public API
+    - Minimal, focused code changes
+    - Easy to understand and maintain
+
+compliance:
+  coding_standards: PASS
+  project_structure: PASS
+  testing_strategy: PASS
+  documentation: PASS
+
+quality_breakdown:
+  implementation_quality: 40   # Clean, minimal, preserves functionality
+  ac_coverage: 40              # All 6 ACs validated
+  test_coverage: 12            # 7 tests (100% AC coverage), -2 for no integration tests
+  documentation: 5             # Good docs, -1 for missing architecture rationale note
+  deductions: -6
+
+gate_history:
+  - date: '2025-11-23T22:00:00Z'
+    gate: PASS
+    reviewer: 'Quinn'
+    score: 94
+    notes: 'UI refactoring complete. All ACs met, comprehensive tests, user confirmed. Ready for Done.'
