@@ -2,88 +2,112 @@
 
 ## Component Architecture
 
-The UI will be built using a composition of custom `QWidget` classes, each responsible for a specific part of the user interface.
+The UI will be built using a composition of custom `QWidget` classes, organized into a **task-oriented tabbed interface** to improve usability and reduce clutter, as specified in the PRD (3.2, 6.1).
 
 ### Component Organization
-The UI components will be organized into Python modules based on their function:
+The UI components will be organized into Python modules based on their function within the new tabbed structure:
 
 ```plaintext
 src/
 └── ui/
     ├── __init__.py
-    ├── main_window.py          # The main application window with QTabWidget (Epic 6.1)
-    ├── search_tab.py           # Search tab with search bar and results (Epic 6.1, 6.5)
-    ├── index_tab.py            # Index management tab (Epic 6.1, 6.2)
-    ├── ai_analysis_tab.py      # AI analysis tab (Epic 6.1)
-    ├── settings_tab.py         # Settings tab (Epic 6.1)
-    ├── paper_list_view.py      # Widget to display the list of source papers
-    ├── chunk_list_view.py      # Widget to display the list of text chunks
-    ├── chunk_detail_dialog.py  # Non-modal chunk detail dialog (Epic 6.4)
-    ├── token_usage_widget.py   # Token usage display widget (Epic 6.6)
-    ├── onboarding_view.py      # The initial setup/welcome screen
-    └── widgets/                # Reusable custom widgets (e.g., progress bars)
+    ├── main_window.py          # Main application window with QTabWidget (Epic 6.1)
+    ├── search_tab.py           # "Search" tab with controls, results, and bottom action buttons (Epic 9.1)
+    ├── index_tab.py            # "Index" tab with library, indexing controls, status column, and summary (Epic 8)
+    ├── analysis_tab.py         # "AI Analysis" tab, now an interactive chat interface (Epic 7)
+    ├── settings_tab.py         # "Settings" tab for app configuration (including split API configs, Epic 7.1)
+    ├── chunk_detail_dialog.py  # Non-modal dialog for full chunk viewing (Epic 6.4)
+    ├── onboarding_view.py      # Initial setup/welcome screen
+    └── widgets/                # Reusable custom widgets
         ├── __init__.py
-        └── ...
+        └── ...                 # TokenUsageWidget is now a controller, not a visible widget
 ```
 
 ### Component Template
-Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to parent widgets or controllers.
+Each major UI component will be a class inheriting from `QWidget` or a more specific Qt class. They will use signals to communicate events to the `MainWindow` controller.
 
 ```python
-# Example: src/ui/search_tab.py (Epic 6.1, 6.4, 6.5)
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QSpinBox, QLabel
+# Example: src/ui/search_tab.py (Epic 9.1 - Reorganized actions)
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, 
+    QPushButton, QSpinBox, QLabel, QListWidget
+)
 from PySide6.QtCore import Signal
-from .chunk_detail_dialog import ChunkDetailDialog
 
 class SearchTab(QWidget):
     # Signal emitted when the user executes a search
-    search_triggered = Signal(str, int)  # query, k_value
+    search_triggered = Signal(str, int)
+    # Signal emitted when user double-clicks a chunk (Epic 6.4)
+    chunk_detail_requested = Signal(object, int, int)  # chunk, index, total
+    # Signals for bottom action buttons (Epic 9.1)
+    open_in_zotero_requested = Signal()
+    open_pdf_requested = Signal()
+    copy_as_prompt_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.layout = QVBoxLayout(self)
         
-        # Search controls grouped together (Epic 6.5)
-        search_controls = QHBoxLayout()
+        # Search controls layout (Epic 6.5 - grouped controls)
+        search_controls_layout = QHBoxLayout()
         self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Enter your search query...")
+        
+        self.results_count_spinner = QSpinBox()
+        self.results_count_spinner.setMinimum(1)
+        self.results_count_spinner.setMaximum(100)
+        self.results_count_spinner.setValue(5)
+        self.results_count_spinner.setToolTip("Number of chunks to retrieve")
+        
         self.search_button = QPushButton("Search")
-        self.k_label = QLabel("Results:")
-        self.k_spinbox = QSpinBox()
-        self.k_spinbox.setRange(1, 100)
-        self.k_spinbox.setValue(50)
         
-        search_controls.addWidget(self.search_bar)
-        search_controls.addWidget(self.k_label)
-        search_controls.addWidget(self.k_spinbox)
-        search_controls.addWidget(self.search_button)
+        search_controls_layout.addWidget(self.search_bar, stretch=3)
+        search_controls_layout.addWidget(QLabel("Results:"))
+        search_controls_layout.addWidget(self.results_count_spinner)
+        search_controls_layout.addWidget(self.search_button)
+
+        # Add search controls to main layout
+        self.layout.addLayout(search_controls_layout)
         
-        self.layout.addLayout(search_controls)
+        # Add results views (papers, chunks) to the layout
+        self.layout.addWidget(QLabel("Papers:"))
+        self.paper_list = QListWidget()
+        self.layout.addWidget(self.paper_list)
         
-        # Results list (Epic 6.4: double-click opens dialog)
-        self.chunk_list = ChunkListView()
-        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_click)
+        self.layout.addWidget(QLabel("Chunks (double-click for full text):"))
+        self.chunk_list = QListWidget()
         self.layout.addWidget(self.chunk_list)
+
+        # Bottom action buttons (Epic 9.1)
+        action_buttons_layout = QHBoxLayout()
+        self.open_zotero_button = QPushButton("Open in Zotero")
+        self.open_pdf_button = QPushButton("Open PDF")
+        self.copy_prompt_button = QPushButton("Copy as Prompt") # Renamed from "Copy to ChatGPT"
         
-        # Connect search button
+        action_buttons_layout.addStretch() # Align buttons to the right
+        action_buttons_layout.addWidget(self.open_zotero_button)
+        action_buttons_layout.addWidget(self.open_pdf_button)
+        action_buttons_layout.addWidget(self.copy_prompt_button)
+        self.layout.addLayout(action_buttons_layout)
+
+        # Connect signals
         self.search_button.clicked.connect(self._on_search)
-        
-        # Non-modal dialog reference (Epic 6.4)
-        self.chunk_detail_dialog = None
+        self.chunk_list.itemDoubleClicked.connect(self._on_chunk_double_clicked)
+        self.copy_prompt_button.clicked.connect(self.copy_as_prompt_requested)
+        # ... connect other action button signals ...
 
     def _on_search(self):
         query = self.search_bar.text()
-        k = self.k_spinbox.value()
+        count = self.results_count_spinner.value()
         if query:
-            self.search_triggered.emit(query, k)
+            self.search_triggered.emit(query, count)
     
-    def _on_chunk_double_click(self, item):
-        # Epic 6.4: Launch non-modal chunk detail dialog
-        chunk = item.data(Qt.UserRole)  # Assuming chunk stored as item data
-        if not self.chunk_detail_dialog:
-            self.chunk_detail_dialog = ChunkDetailDialog(self)
-        self.chunk_detail_dialog.show_chunk(chunk, self.chunk_list.get_all_chunks())
-        self.chunk_detail_dialog.show()
+    def _on_chunk_double_clicked(self, item):
+        chunk_index = self.chunk_list.row(item)
+        total_chunks = self.chunk_list.count()
+        chunk_data = item.data(Qt.UserRole)
+        self.chunk_detail_requested.emit(chunk_data, chunk_index, total_chunks)
 
 ```
 
@@ -98,6 +122,7 @@ A Python `dataclass` will hold the application's shared state.
 # Example: src/ui/state.py
 from dataclasses import dataclass, field
 from typing import Optional, List
+from ..core.data.models import TokenUsage
 
 @dataclass
 class AppState:
@@ -106,9 +131,9 @@ class AppState:
     indexing_progress: float = 0.0
     search_results: List[dict] = field(default_factory=list)
     selected_paper: Optional[dict] = None
-    collection_paper_counts: dict[int, int] = field(default_factory=dict)  # Epic 6.3
-    token_usage_history: List[TokenUsage] = field(default_factory=list)  # Epic 6.6
-    current_session_cost: float = 0.0  # Epic 6.6
+    token_usage_history: List[TokenUsage] = field(default_factory=list)
+    current_session_cost: float = 0.0
+    chat_history: List[dict] = field(default_factory=list) # Epic 7.4 - For chat interface
     # ... other state variables
 
 # Example: src/config/models.py
@@ -118,9 +143,12 @@ class AppSettings:
     # Paths
     zotero_data_path: Optional[str] = None
     
-    # API Configuration
-    api_base_url: str = "https://api.openai.com/v1"
+    # Embedding API Configuration (Epic 7.1)
+    embedding_api_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-ada-002"
+    
+    # Chat API Configuration (Epic 7.1)
+    chat_api_base_url: str = "https://api.openai.com/v1"
     chat_model: str = "gpt-4"
     
     # Chunking Configuration
@@ -136,7 +164,7 @@ class AppSettings:
     # UI Preferences
     theme: str = "light"  # light, dark, auto
     
-    # Note: API key is stored separately in OS keychain via keyring
+    # Note: API keys are stored separately in OS keychain via keyring
 ```
 
 ### State Management Patterns
@@ -145,49 +173,72 @@ class AppSettings:
     1.  The `MainWindow` will own the state object.
     2.  When a background service (like `IndexingService`) updates the state, it will emit a signal with the new state.
     3.  The `MainWindow` will have a slot connected to this signal. When the slot receives the new state, it updates its `AppState` instance.
-    4.  The `MainWindow` then passes the relevant parts of the state down to child widgets (like `PaperListView` and `ChunkListView`), which then re-render themselves.
+    4.  The `MainWindow` then passes the relevant parts of the state down to child widgets (the active tab), which then re-render themselves.
 
 ## Routing Architecture
 
-"Routing" in this desktop application refers to switching between different views (e.g., onboarding vs. main search interface).
+"Routing" in this desktop application refers to switching between the initial onboarding view and the main tabbed interface.
 
 ### Route Organization
-A `QStackedWidget` in the `MainWindow` will be used to manage different full-screen views.
+A `QStackedWidget` in the `MainWindow` will manage the top-level views (onboarding vs. main tabs). The main interface itself will be a `QTabWidget`.
 
 ```python
 # Example: src/ui/main_window.py
-# ... imports
-from PySide6.QtWidgets import QMainWindow, QStackedWidget
+from PySide6.QtWidgets import QMainWindow, QStackedWidget, QTabWidget
 from .onboarding_view import OnboardingView
-from .search_view import SearchView
-from ..config.settings_manager import SettingsManager # Assuming SettingsManager is accessible
+from .search_tab import SearchTab
+from .index_tab import IndexTab
+from .analysis_tab import AnalysisTab
+from .settings_tab import SettingsTab
+from ..config.settings_manager import SettingsManager
 
 class MainWindow(QMainWindow):
     def __init__(self, settings_manager: SettingsManager):
         super().__init__()
-        self.settings = settings_manager # Inject settings manager
+        self.settings = settings_manager
 
         self.stacked_widget = QStackedWidget()
         self.onboarding_view = OnboardingView()
-        self.search_view = SearchView()
+        self.main_tabs = QTabWidget()
+
+        # Create and add tabs
+        self.search_tab = SearchTab()
+        self.index_tab = IndexTab()
+        self.analysis_tab = AnalysisTab()
+        self.settings_tab = SettingsTab()
+
+        self.main_tabs.addTab(self.search_tab, "Search")
+        self.main_tabs.addTab(self.index_tab, "Index")
+        self.main_tabs.addTab(self.analysis_tab, "AI Analysis")
+        self.main_tabs.addTab(self.settings_tab, "Settings")
 
         self.stacked_widget.addWidget(self.onboarding_view)
-        self.stacked_widget.addWidget(self.search_view)
+        self.stacked_widget.addWidget(self.main_tabs)
 
         self.setCentralWidget(self.stacked_widget)
 
-        self.show_onboarding_if_needed()
+        self.show_initial_view()
 
-    def show_onboarding_if_needed(self):
+    def show_initial_view(self):
         # Logic to check if Zotero path is set
-        if not self.settings.get_zotero_path(): # Assuming get_zotero_path() exists
+        if not self.settings.get_zotero_path():
             self.stacked_widget.setCurrentWidget(self.onboarding_view)
         else:
-            self.stacked_widget.setCurrentWidget(self.search_view)
+            self.stacked_widget.setCurrentWidget(self.main_tabs)
+            # Default to the Search tab on launch (Epic 8.4)
+            self.main_tabs.setCurrentWidget(self.search_tab)
+            
+            # Disable search tab until indexing is complete
+            if not self.is_indexing_complete(): # is_indexing_complete is a placeholder
+                self.search_tab.setEnabled(False)
+                # Optionally, switch to Index tab if no index exists, but don't auto-switch after indexing
+                if not self.search_tab.isEnabled():
+                    self.main_tabs.setCurrentWidget(self.index_tab)
+
 ```
 
 ### "Protected Route" Pattern
-This pattern translates to enabling/disabling UI elements based on application state. For example, the "Analyze with AI" button will be disabled until a valid API key is entered in the settings. This is managed by simple conditional logic in the UI components.
+This pattern translates to enabling/disabling UI elements based on application state. For example, the "Search" tab will be disabled until the initial indexing is complete. The "Analyze with AI" button will be disabled until a valid API key is entered. This is managed by simple conditional logic in the UI components.
 
 ## Frontend Services Layer
 
@@ -197,13 +248,13 @@ This layer is the bridge between the UI components and the core Python logic ser
 UI components will not call services directly. Instead, the `MainWindow` will hold instances of the core services and expose methods for the UI to call. To keep the UI responsive, all long-running service calls will be executed in background threads using `QThreadPool`.
 
 ### Service Example
-This example shows how the `SearchView` can trigger a search, which the `MainWindow` then runs in a background thread.
+This example shows how the `SearchTab` can trigger a search, which the `MainWindow` then runs in a background thread.
 
 ```python
 # In src/ui/main_window.py
-from PySide6.QtCore import QRunnable, QThreadPool, Slot, Signal
-from PySide6.QtWidgets import QMainWindow, QStackedWidget # ... other imports
-from ..core.services.search_service import SearchService # Assuming SearchService is available
+from PySide6.QtCore import QRunnable, QThreadPool, Slot, Signal, QObject
+from PySide6.QtWidgets import QMainWindow
+from ..core.services.search_service import SearchService
 
 # Worker for running a task in the background
 class Worker(QRunnable):
@@ -212,7 +263,7 @@ class Worker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
-        self.signals = WorkerSignals() # Custom signals for worker
+        self.signals = WorkerSignals()
 
     @Slot()
     def run(self):
@@ -230,40 +281,41 @@ class WorkerSignals(QObject):
     finished = Signal()
 
 class MainWindow(QMainWindow):
+    search_complete = Signal(list)
     # ... (previous __init__ content)
 
     def __init__(self, settings_manager: SettingsManager):
         super().__init__()
+        # ... setup UI and tabs ...
         self.settings = settings_manager
         self.search_service = SearchService(
             # ... inject dependencies for SearchService
-            None, None, None, None # Placeholder for now
         )
         self.thread_pool = QThreadPool()
 
-        # Connect search trigger from SearchView to our handler
-        self.search_view.search_triggered.connect(self.on_search)
+        # Connect search trigger from SearchTab to our handler
+        self.search_tab.search_triggered.connect(self.on_search)
         # Connect our completion signal to a UI update slot
         self.search_complete.connect(self.update_search_results)
 
-    @Slot(str)
-    def on_search(self, query):
+    @Slot(str, int)
+    def on_search(self, query, count):
         # Disable UI elements, show loading indicator
-        worker = Worker(self._execute_search, query)
+        worker = Worker(self._execute_search, query, count)
         worker.signals.result.connect(self.search_complete.emit)
-        worker.signals.error.connect(self.handle_search_error) # Connect error signal
-        worker.signals.finished.connect(self.search_finished) # Connect finished signal
+        worker.signals.error.connect(self.handle_search_error)
+        worker.signals.finished.connect(self.search_finished)
         self.thread_pool.start(worker)
 
-    def _execute_search(self, query):
-        return self.search_service.search(query)
+    def _execute_search(self, query, count):
+        return self.search_service.search(query, k=count)
 
     @Slot(list)
     def update_search_results(self, results):
         # Update AppState and pass results to child widgets
         # Re-enable UI, hide loading indicator
         print(f"Search results received: {len(results)} items")
-        pass
+        self.search_tab.display_results(results) # Example method
 
     @Slot(str)
     def handle_search_error(self, error_message):

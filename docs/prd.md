@@ -23,6 +23,7 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | 2025-11-18 | 1.0 | Initial draft based on Project Brief and preliminary PRD. | John (PM) |
 | 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |
 | 2025-11-22 | 1.2 | Added Epics 7, 8, and 9 for post-MVP UX and AI enhancements. | John (PM) |
+| 2025-11-23 | 1.3 | Replaced PyMuPDF with pdfplumber and added Epic 10 for migration. | John (PM) |
 
 ## 2. Requirements
 
@@ -123,7 +124,7 @@ Testing will include both unit tests for individual components and integration t
 
 *   **Language:** Python 3.13+
 *   **GUI Framework:** PySide6
-*   **PDF Extraction Library:** PyMuPDF
+*   **PDF Extraction Library:** pdfplumber
 *   **Cloud Embedding API:** OpenAI embeddings as default, with the ability for users to configure other compatible API endpoints.
 *   **Local Vector Database:** FAISS
 *   **Local Metadata Storage:** SQLite (for storing chunk metadata and Zotero item information, complementing FAISS for vector storage)
@@ -133,7 +134,7 @@ Testing will include both unit tests for individual components and integration t
 
 ## 5. Epic List
 
-*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using PyMuPDF.
+*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using pdfplumber.
 *   **Epic 2: Indexing & Local Vector Store:** Implement the text chunking, cloud embedding API calls (OpenAI by default), and local vector database (FAISS + SQLite) for storing embeddings and metadata, delivering the ability to build and incrementally update the semantic index.
 *   **Epic 3: Semantic Search & Results Display:** Develop the natural language query processing, retrieval from the local vector store, and the UI for displaying relevant chunks and source papers, delivering the core semantic search functionality.
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
@@ -209,13 +210,13 @@ so that **I can see my Zotero data within the app**.
 #### Story 1.4: Extract Text from Attached PDFs
 
 As a **user**,
-I want the app to **identify PDF attachments for Zotero items and extract their text content using PyMuPDF**,
+I want the app to **identify PDF attachments for Zotero items and extract their text content using pdfplumber**,
 so that **the text can be prepared for indexing**.
 
 ##### Acceptance Criteria
 
 1.  1.4.1: For each Zotero item with a PDF attachment, the application can locate the PDF file in the `storage/` directory.
-2.  1.4.2: The application successfully extracts text content from a sample PDF using PyMuPDF.
+2.  1.4.2: The application successfully extracts text content from a sample PDF using pdfplumber.
 3.  1.4.3: The application logs errors for PDFs from which text extraction fails, but continues processing other PDFs.
 4.  1.4.4: The extracted text is available for subsequent processing steps.
 
@@ -783,8 +784,78 @@ so that **the interface is cleaner and I can easily find the actions I need**.
 
 ##### Acceptance Criteria
 
+
+
 1.  9.1.1: Action buttons ("Open in Zotero", "Open PDF", "Copy as Prompt") are moved to the bottom of the Search tab.
+
 2.  9.1.2: The "Copy to ChatGPT" button is renamed to "Copy as Prompt".
+
 3.  9.1.3: The layout is clean with appropriate spacing.
+
 4.  9.1.4: Button enabled/disabled logic is preserved.
+
 5.  9.1.5: All button functionality is preserved.
+
+
+
+### Epic 10: PDF Library Migration
+
+
+
+#### Expanded Goal:
+
+
+
+This epic addresses the need to migrate the PDF extraction library from PyMuPDF to pdfplumber to resolve licensing issues. The goal is to replace the existing implementation while ensuring that text extraction quality, performance, and error handling remain consistent with the original requirements.
+
+
+
+#### Story 10.1: Replace PDF Extraction Implementation
+
+
+
+As a **developer**,
+
+I want to **replace the PyMuPDF-based text extraction with a pdfplumber-based implementation**,
+
+so that **the project complies with licensing requirements**.
+
+
+
+##### Acceptance Criteria
+
+
+
+1.  10.1.1: All code referencing `PyMuPDF` is removed and replaced with `pdfplumber` equivalents.
+
+2.  10.1.2: The application successfully extracts text content from a sample PDF using `pdfplumber`.
+
+3.  10.1.3: The application logs errors for PDFs from which text extraction fails but continues processing other PDFs.
+
+4.  10.1.4: The extracted text is available for subsequent processing steps in the same format as the previous implementation.
+
+
+
+#### Story 10.2: Verify Performance and Stability
+
+
+
+As a **user**,
+
+I want to **ensure that the new PDF extraction library performs efficiently and does not introduce instability**,
+
+so that **the application remains responsive and reliable**.
+
+
+
+##### Acceptance Criteria
+
+
+
+1.  10.2.1: PDF extraction performance with `pdfplumber` is benchmarked and found to be comparable to `PyMuPDF` for a representative set of documents.
+
+2.  10.2.2: Memory usage during PDF processing does not significantly increase.
+
+3.  10.2.3: Integration tests for the indexing process pass successfully with the new library.
+
+4.  10.2.4: Error handling for corrupted or unreadable PDFs is robust.

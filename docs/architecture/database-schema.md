@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS documents (
     authors TEXT, -- Stored as JSON string (e.g., '["Author One", "Author Two"]')
     year INTEGER,
     pdf_file_path TEXT NOT NULL,
-    indexed_at TEXT NOT NULL -- ISO 8601 format (YYYY-MM-DD HH:MM:SS.SSS)
+    indexed_at TEXT NOT NULL, -- ISO 8601 format (YYYY-MM-DD HH:MM:SS.SSS)
+    indexing_status TEXT NOT NULL DEFAULT 'not_indexed' -- ('not_indexed', 'indexed', 'no_pdf', 'pdf_error')
 );
 
 -- Index for efficient lookup by Zotero item key

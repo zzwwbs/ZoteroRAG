@@ -20,3 +20,5 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | :--- | :--- | :--- | :--- |
 | 2025-11-18 | 1.0 | Initial draft based on Project Brief and preliminary PRD. | John (PM) |
 | 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |
+| 2025-11-22 | 1.2 | Added Epics 7, 8, and 9 for post-MVP UX and AI enhancements. | John (PM) |
+| 2025-11-23 | 1.3 | Replaced PyMuPDF with pdfplumber and added Epic 10 for migration. | John (PM) |

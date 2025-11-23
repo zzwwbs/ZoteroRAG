@@ -125,8 +125,9 @@ def test_shows_main_view_when_onboarding_completed(qapp):
         auto_start=True,
     )
 
-    # Should show main container (index 1 in stack)
+    # Should show main container (index 1 in stack) and default to Search tab
     assert window._stack.currentWidget() == window._main_container
+    assert window._main_tabs.currentWidget() == window.search_tab
 
 
 def test_shows_onboarding_when_path_invalid(qapp):

@@ -2,7 +2,14 @@
 
 ## Coding Standards
 
-All code contributions must adhere to the guidelines specified in the `CONTRIBUTING.md` file located in the root of the repository. This document details our standards for code formatting (`black`), linting (`ruff`), type hinting, and docstrings. Before submitting any code, please ensure it complies with these standards.
+All code contributions must adhere to the guidelines specified in the `CONTRIBUTING.md` file located in the root of the repository. This document details our standards for code quality and consistency. Specifically:
+
+*   **Code Formatting:** We use `black` for uncompromising code formatting to ensure a consistent style across the entire codebase.
+*   **Linting:** `ruff` is employed for fast and efficient linting, catching common errors and enforcing best practices.
+*   **Type Hinting:** All new Python code must include comprehensive type hints to improve readability, maintainability, and enable static analysis.
+*   **Docstrings:** Functions, classes, and modules should be documented using Google-style docstrings to explain their purpose, arguments, and return values.
+
+Before submitting any code, please ensure it complies with these standards. Automated checks are in place via CI/CD to enforce these guidelines.
 
 ## Local Development Setup
 
@@ -64,7 +71,7 @@ Environment variables are primarily used for development-time flags or sensitive
 
 ## Search and AI Analysis Workflow
 
-This workflow describes how a user performs a search and optionally uses the AI analysis feature.
+This workflow describes how a user performs a search and then engages in an interactive chat session for AI analysis.
 
 ```mermaid
 sequenceDiagram
@@ -83,47 +90,29 @@ sequenceDiagram
     activate SS
 
     SS->>EC: get_embedding(query)
-    activate EC
-    EC->>OAI: POST /v1/embeddings (query)
-    activate OAI
-    OAI-->>EC: Returns query_vector
-    deactivate OAI
-    EC-->>SS: Returns query_vector
-    deactivate EC
-
     SS->>VDM: search_vectors(query_vector, k=50)
-    activate VDM
-    VDM-->>SS: Returns list of vector_ids
-    deactivate VDM
-
     SS->>MDM: get_chunks_by_vector_ids(vector_ids)
-    activate MDM
-    MDM-->>SS: Returns list of Chunk objects
-    deactivate MDM
-
     SS->>MDM: get_documents_for_chunks(chunks)
-    activate MDM
-    MDM-->>SS: Returns enriched Document info
-    deactivate MDM
-
     SS-->>UI: Returns formatted search results
     deactivate SS
 
     UI->>UI: Re-enables UI, displays results in Papers/Chunks view
-    User->>UI: Reviews results
+    User->>UI: Reviews results, switches to AI Analysis Tab
 
-    alt Optional: User clicks "Analyze with AI"
-        UI->>AIS: analyze_chunks(query, top_chunks)
+    loop Interactive Chat Session (Epic 7)
+        User->>UI: Enters chat message
+        UI->>UI: Displays user message in chat history
+        UI->>AIS: get_chat_response(history, include_context, top_chunks)
         activate AIS
 
-        AIS->>OAI: POST /v1/chat/completions (prompt with query + chunks)
+        AIS->>OAI: POST /v1/chat/completions (prompt with history + optional context)
         activate OAI
         OAI-->>AIS: Returns synthesized answer
         deactivate OAI
 
-        AIS-->>UI: Returns synthesized answer
+        AIS-->>UI: Returns synthesized answer and token usage
         deactivate AIS
 
-        UI->>User: Displays AI-generated summary with citations
+        UI->>UI: Displays AI response in chat history
     end
 ```

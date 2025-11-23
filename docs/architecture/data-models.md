@@ -12,6 +12,7 @@
 *   `year`: `int` - The publication year.
 *   `pdf_file_path`: `str` - The absolute file path to the PDF.
 *   `indexed_at`: `datetime` - The timestamp of when the document was last indexed.
+*   `indexing_status`: `str` - The current indexing status ('not_indexed', 'indexed', 'no_pdf', 'pdf_error').
 
 ### Python Dataclass
 ```python
@@ -27,6 +28,7 @@ class Document:
     year: int
     pdf_file_path: str
     indexed_at: datetime
+    indexing_status: str
 ```
 
 ### Relationships
@@ -111,15 +113,14 @@ class DocumentCollection:
 ---
 ## TokenUsage
 
-**Purpose:** Tracks API token consumption for embedding and AI analysis operations (Epic 6.6). Enables transparency around costs and usage patterns.
+**Purpose:** Represents a record of API token consumption for a single operation, enabling transparency and cost tracking for users.
 
 **Key Attributes:**
-*   `id`: `int` - The unique identifier for the usage record.
 *   `timestamp`: `datetime` - When the API call was made.
-*   `operation`: `str` - Type of operation (e.g., "embedding", "chat_completion").
-*   `tokens_used`: `int` - Number of tokens consumed.
-*   `model`: `str` - The model used (e.g., "text-embedding-ada-002", "gpt-4").
-*   `estimated_cost_usd`: `float` - Calculated cost based on model pricing.
+*   `operation`: `str` - The type of operation ("embedding" or "analysis").
+*   `tokens_used`: `int` - The number of tokens consumed in this operation.
+*   `model`: `str` - The model used for the operation (e.g., "text-embedding-ada-002", "gpt-4").
+*   `estimated_cost_usd`: `float` - The estimated cost in USD for this operation.
 
 ### Python Dataclass
 ```python
@@ -128,14 +129,13 @@ from datetime import datetime
 
 @dataclass
 class TokenUsage:
-    id: int
     timestamp: datetime
-    operation: str  # "embedding" or "chat_completion"
+    operation: str  # "embedding" or "analysis"
     tokens_used: int
     model: str
     estimated_cost_usd: float
 ```
 
 ### Relationships
-*   Standalone tracking table with no foreign key relationships.
-*   Queried for session totals and historical analysis.
+*   Stored as a list in application state for session-based tracking.
+*   Used by the `TokenUsageWidget` component for display.

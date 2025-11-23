@@ -45,6 +45,7 @@ class IndexingService:
         self._progress_callback: Callable[[Dict[str, Any]], None] | None = None
         self._cancel_event = threading.Event()
         self._usage_callback: Callable[[Any], None] | None = None
+        self._status_callback: Callable[[Dict[str, Any]], None] | None = None
 
         self._metadata_manager.initialize_database()
         try:
@@ -57,6 +58,9 @@ class IndexingService:
 
     def set_usage_callback(self, callback: Callable[[Any], None] | None) -> None:
         self._usage_callback = callback
+
+    def set_status_callback(self, callback: Callable[[Dict[str, Any]], None] | None) -> None:
+        self._status_callback = callback
 
     def cancel_indexing(self) -> None:
         """Signal the current indexing run to stop after the current item."""
@@ -114,6 +118,7 @@ class IndexingService:
 
             if self._is_already_indexed(item):
                 payload["status"] = "skipped"
+                self._record_status(item, "Indexed")
                 self._emit_progress(payload)
                 continue
 
@@ -215,6 +220,14 @@ class IndexingService:
         existing = repo.get_by_zotero_key(item.item_key or str(item.item_id))
         if existing:
             repo.update_status(item.item_key or str(item.item_id), status)
+            if self._status_callback:
+                self._status_callback(
+                    {
+                        "zotero_key": item.item_key or str(item.item_id),
+                        "status": status,
+                        "title": item.title,
+                    }
+                )
             return
         doc = Document(
             zotero_item_key=item.item_key or str(item.item_id),
@@ -224,7 +237,15 @@ class IndexingService:
             pdf_file_path="",
             indexing_status=status,
         )
-        repo.insert(doc)
+        saved = repo.insert(doc)
+        if self._status_callback and saved.id is not None:
+            self._status_callback(
+                {
+                    "zotero_key": item.item_key or str(item.item_id),
+                    "status": status,
+                    "title": item.title,
+                }
+            )
 
     def _emit_progress(self, payload: Dict[str, Any]) -> None:
         if self._progress_callback:

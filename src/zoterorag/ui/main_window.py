@@ -158,7 +158,7 @@ class MainWindow(QMainWindow):
         self._main_tabs.addTab(self.settings_tab, "Settings")
         self._search_tab_index = self._main_tabs.indexOf(self.search_tab)
         self._set_search_tab_enabled(False)
-        self._main_tabs.setCurrentWidget(self.index_tab)
+        self._main_tabs.setCurrentWidget(self.search_tab)
 
         self._main_container = QWidget()
         main_layout = QVBoxLayout(self._main_container)
@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
 
     def _show_main_view(self, zotero_path: Path | None = None) -> None:
         self._stack.setCurrentWidget(self._main_container)
-        self._main_tabs.setCurrentWidget(self.index_tab)
+        self._main_tabs.setCurrentWidget(self.search_tab)
         self._refresh_library(zotero_path or self._settings_manager.get_zotero_path())
 
     def _show_onboarding_view(self) -> None:
@@ -307,6 +307,7 @@ class MainWindow(QMainWindow):
         self._indexed_count = 0
         self._no_pdf_count = 0
         self._error_count = 0
+        self._skipped_count = 0
         self._processed_count = 0
         self.index_tab.update_summary("")
         self._thread_pool.start(worker)
@@ -322,7 +323,6 @@ class MainWindow(QMainWindow):
         status = payload.get("status")
         if status == "complete":
             self._set_search_tab_enabled(True)
-            self._main_tabs.setCurrentWidget(self.search_tab)
             self._cancel_requested = False
         elif status == "processing" and not self._cancel_requested:
             self.index_tab.show_indexing_active()
@@ -339,6 +339,7 @@ class MainWindow(QMainWindow):
             f"Processed: {self._processed_count} | "
             f"✅ Indexed: {self._indexed_count} | "
             f"⚠️ No PDF: {self._no_pdf_count} | "
+            f"⏭️ Skipped: {self._skipped_count} | "
             f"❌ Errors: {self._error_count}"
         )
         if was_cancelled:
@@ -366,6 +367,8 @@ class MainWindow(QMainWindow):
                 self._no_pdf_count += 1
             elif status == "PDF Error":
                 self._error_count += 1
+            elif status == "Skipped":
+                self._skipped_count += 1
         except Exception:
             logger.exception("Failed to handle status update payload: %s", payload)
 

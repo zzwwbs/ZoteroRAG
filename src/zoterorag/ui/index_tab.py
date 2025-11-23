@@ -22,10 +22,14 @@ class IndexTab(QWidget):
         self.indexing_scope_view.scope_selected.connect(self._emit_start_indexing)
         self.indexing_scope_view.cancel_requested.connect(self.cancel_indexing.emit)
 
+        self.summary_label = QLabel("")
+        self.summary_label.setVisible(False)
+
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Zotero Library"))
         layout.addWidget(self.library_view)
         layout.addWidget(self.indexing_scope_view)
+        layout.addWidget(self.summary_label)
         layout.addStretch()
 
     def _emit_start_indexing(self, scope: dict) -> None:
@@ -40,3 +44,7 @@ class IndexTab(QWidget):
 
     def show_idle(self) -> None:
         self.indexing_scope_view.set_idle_mode()
+
+    def update_summary(self, summary_text: str) -> None:
+        self.summary_label.setText(summary_text)
+        self.summary_label.setVisible(bool(summary_text))

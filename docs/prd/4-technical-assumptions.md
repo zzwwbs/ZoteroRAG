@@ -16,7 +16,7 @@ Testing will include both unit tests for individual components and integration t
 
 *   **Language:** Python 3.13+
 *   **GUI Framework:** PySide6
-*   **PDF Extraction Library:** PyMuPDF
+*   **PDF Extraction Library:** pdfplumber
 *   **Cloud Embedding API:** OpenAI embeddings as default, with the ability for users to configure other compatible API endpoints.
 *   **Local Vector Database:** FAISS
 *   **Local Metadata Storage:** SQLite (for storing chunk metadata and Zotero item information, complementing FAISS for vector storage)

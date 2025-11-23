@@ -21,6 +21,7 @@ class LibraryTableModel(QAbstractTableModel):
         super().__init__()
         self._items = list(items or [])
         self._statuses = statuses or {}
+        self._key_to_row: dict[str, int] = {it.item_key: idx for idx, it in enumerate(self._items)}
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # type: ignore[override]
         return len(self._items)
@@ -49,6 +50,7 @@ class LibraryTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._items = list(items)
         self._statuses = statuses or {}
+        self._key_to_row = {it.item_key: idx for idx, it in enumerate(self._items)}
         self.endResetModel()
 
     def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:  # type: ignore[override]
@@ -75,6 +77,15 @@ class LibraryTableModel(QAbstractTableModel):
             "PDF Error": {"text": "❌ PDF Error", "color": QColor("#c62828")},
         }
         return mapping.get(status, mapping["Not Indexed"])
+
+    def update_status(self, zotero_key: str, status: str) -> None:
+        """Update a single item's status if present."""
+        row = self._key_to_row.get(zotero_key)
+        if row is None:
+            return
+        self._statuses[zotero_key] = status
+        index = self.index(row, 3)
+        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.ForegroundRole])
 
 
 class LibraryView(QWidget):

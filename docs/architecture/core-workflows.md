@@ -26,51 +26,46 @@ sequenceDiagram
         SM-->>UI: Path Saved Confirmation
     end
 
-    UI->>User: Displays "Start Indexing" Option
+    UI->>User: Displays "Start Indexing" Option on Index Tab
     User->>UI: Clicks "Start Indexing"
     UI->>IS: start_indexing(scope=ALL_LIBRARY)
     activate IS
 
-    IS->>ZM: get_all_documents()
-    activate ZM
-    ZM->>ZM: Reads zotero.sqlite & Locates PDFs
-    ZM->>ZM: Extracts text from PDFs (PyMuPDF)
-    ZM-->>IS: Returns list of (Document, ExtractedText)
-    deactivate ZM
+    par
+        IS->>ZM: get_all_documents()
+        activate ZM
+        ZM->>ZM: Reads zotero.sqlite & Locates PDFs
+        ZM->>ZM: Extracts text from PDFs (pdfplumber)
+        ZM-->>IS: Returns list of (Document, ExtractedText)
+        deactivate ZM
 
-    loop For Each Document
-        loop For Each Text Chunk
-            IS->>CU: chunk_text(text, doc_id, page_num)
-            activate CU
-            CU-->>IS: Returns Chunk object
-            deactivate CU
-
-            IS->>EC: get_embedding(chunk.content)
-            activate EC
-            EC->>SM: get_api_key()
-            SM-->>EC: Returns API Key
-            EC->>OAI: POST /v1/embeddings (chunk.content, api_key)
-            activate OAI
-            OAI-->>EC: Returns embedding vector
-            deactivate OAI
-            EC-->>IS: Returns embedding vector
-            deactivate EC
-
-            IS->>MDM: save_chunk(chunk_metadata)
-            activate MDM
-            MDM-->>IS: Chunk Saved Confirmation
-            deactivate MDM
-
-            IS->>VDM: add_vectors([embedding_vector], [chunk.id])
-            activate VDM
-            VDM-->>IS: Vector Added Confirmation
-            deactivate VDM
-
+        loop For Each Document
             IS->>UI: Update Indexing Progress
-        end
-    end
 
-    IS-->>UI: Indexing Complete
-    deactivate IS
-    UI->>User: Displays "Indexing Complete"
+            loop For Each Text Chunk
+                IS->>CU: chunk_text(text, doc_id, page_num)
+                CU-->>IS: Returns Chunk object
+
+                IS->>EC: get_embedding(chunk.content)
+                EC-->>IS: Returns (embedding_vector, token_usage)
+
+                IS->>MDM: save_chunk(chunk_metadata)
+                MDM-->>IS: Chunk Saved Confirmation
+
+                IS->>VDM: add_vectors([embedding_vector], [chunk.id])
+                VDM-->>IS: Vector Added Confirmation
+            end
+        end
+        IS-->>UI: Indexing Complete
+        deactivate IS
+        UI->>User: Displays "Indexing Complete"
+
+    and User can cancel anytime (Epic 6, Story 6.2)
+        User->>UI: Clicks "Cancel Indexing"
+        UI->>IS: cancel_indexing()
+        Note over IS: Cancellation flag is set.<br/>Current item completes, then stops.
+        IS-->>UI: Indexing Cancelled (partial index valid)
+        UI->>User: Displays "Indexing Cancelled"<br/>"Partial index is usable"
+        Note over UI: Button returns to "Start Indexing"
+    end
 ```
