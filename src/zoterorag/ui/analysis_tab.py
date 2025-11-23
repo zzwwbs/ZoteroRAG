@@ -12,6 +12,7 @@ class AnalysisTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.conversation_history: list[dict] = []
         self.analyze_button = QPushButton("Analyze Selected Papers")
         self.analyze_button.setEnabled(False)
         self.analyze_button.setProperty("busy", False)
@@ -37,3 +38,28 @@ class AnalysisTab(QWidget):
         layout.addWidget(self.chat_view)
         layout.addLayout(input_row)
         layout.addStretch()
+
+    def reset_conversation(self) -> None:
+        """Clear chat view and history."""
+        self.chat_view.clear_messages()
+        self.conversation_history.clear()
+
+    def add_user_message(self, content: str) -> None:
+        self.conversation_history.append({"role": "user", "content": content})
+        self._truncate_history()
+        self.chat_view.add_message("You", content, role="user")
+
+    def add_assistant_message(self, content: str) -> None:
+        self.conversation_history.append({"role": "assistant", "content": content})
+        self._truncate_history()
+        self.chat_view.add_message("Assistant", content, role="assistant")
+
+    def add_error_message(self, content: str) -> None:
+        self.chat_view.add_message("Error", content, role="error", is_error=True)
+
+    def get_history(self) -> list[dict]:
+        return list(self.conversation_history)
+
+    def _truncate_history(self, limit: int = 10) -> None:
+        if len(self.conversation_history) > limit:
+            self.conversation_history = self.conversation_history[-limit:]

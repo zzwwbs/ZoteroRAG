@@ -52,5 +52,10 @@ class ChatView(QWidget):
                 widget.setParent(None)
 
     def _scroll_to_bottom(self) -> None:
-        bar = self._scroll_area.verticalScrollBar()
-        bar.setValue(bar.maximum())
+        try:
+            bar = self._scroll_area.verticalScrollBar()
+            if bar:
+                bar.setValue(bar.maximum())
+        except RuntimeError:
+            # Widget may have been deleted if called from deferred QTimer
+            pass

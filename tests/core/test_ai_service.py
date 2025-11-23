@@ -98,6 +98,35 @@ def test_analyze_chunks_replaces_placeholders():
     assert session.requests[0]["url"] == "https://example.com/v1/chat/completions"
 
 
+def test_chat_returns_content_and_usage():
+    def responder(url, json_payload, headers, timeout):
+        assert json_payload["messages"][0]["role"] == "system"
+        return FakeResponse(
+            True,
+            payload={
+                "choices": [{"message": {"content": "hi"}}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 3},
+            },
+        )
+
+    service = AIService(
+        DummySettings("key"),
+        session_factory=lambda: FakeSession(responder),
+        model="chat-model",
+        base_url="https://example.com/v1",
+    )
+    reply, usage = service.chat(
+        [
+            {"role": "system", "content": "hello"},
+            {"role": "user", "content": "hi"},
+        ]
+    )
+    assert reply == "hi"
+    assert usage.tokens_used == 5
+    assert usage.prompt_tokens == 2
+    assert usage.completion_tokens == 3
+
+
 def test_missing_key_raises():
     service = AIService(DummySettings(None))
     with pytest.raises(UnauthorizedAIServiceError):

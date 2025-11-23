@@ -52,6 +52,62 @@ class AIService:
         self._session = self._session_factory()
         self._metadata_manager = metadata_manager
 
+    def chat(self, messages: list[dict]) -> tuple[str, TokenUsage]:
+        """Send chat history to completion endpoint and return the assistant reply and usage."""
+
+        api_key = self._settings_manager.get_chat_api_key()
+        if not api_key:
+            raise UnauthorizedAIServiceError("API key is not configured.")
+
+        url = f"{self._base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self._model,
+            "messages": messages,
+        }
+
+        try:
+            response = self._session.post(url, json=payload, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as error:
+            logger.exception("AI chat request failed due to network error.")
+            raise AIServiceError("Network error while requesting AI chat.") from error
+
+        if response.status_code == 401:
+            raise UnauthorizedAIServiceError("Invalid API key.")
+        if not response.ok:
+            raise AIServiceError(f"AI API error ({response.status_code}): {response.text}")
+
+        data = response.json()
+        try:
+            content = data["choices"][0]["message"]["content"]
+            usage_payload = data.get("usage") or {}
+            print(
+                f"[AIService] chat usage payload (model={self._model}, base_url={self._base_url}): {usage_payload}",
+                flush=True,
+            )
+            logger.info("AI chat usage payload (model=%s, base_url=%s): %s", self._model, self._base_url, usage_payload)
+            tokens, prompt_tokens, completion_tokens = self._extract_tokens(usage_payload)
+        except (KeyError, IndexError, TypeError, ValueError) as error:
+            raise AIServiceError("Invalid response format from AI API.") from error
+
+        usage = TokenUsage(
+            operation="chat_completion",
+            tokens_used=tokens,
+            model=self._model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+        if self._metadata_manager:
+            try:
+                self._metadata_manager.token_usage_repository.insert(usage)
+            except Exception:  # pragma: no cover - safety
+                logger.exception("Failed to record token usage for chat")
+
+        return content, usage
+
     def analyze_chunks(self, query: str, matches: Sequence[SearchMatch], top_n: int = 10) -> tuple[str, TokenUsage]:
         """Send query and top N chunks to LLM and return synthesized answer with citations."""
 

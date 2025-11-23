@@ -44,6 +44,7 @@ from ..core.services.zotero_manager import (
 from .onboarding_view import OnboardingView
 from .settings_dialog import SettingsDialog
 from .analysis_tab import AnalysisTab
+from .chat_worker import ChatRunnable
 from .index_tab import IndexTab
 from .search_tab import SearchTab
 from .settings_tab import SettingsTab
@@ -361,7 +362,7 @@ class MainWindow(QMainWindow):
         if not self._state.current_query:
             self._chat_view.add_message("Error", "No query available to analyze.", role="error", is_error=True)
             return
-        self._chat_view.clear_messages()
+        self.analysis_tab.reset_conversation()
         top_n = self._chunk_count.value()
         worker = _AIAnalyzeRunnable(
             self._ai_service,
@@ -392,10 +393,10 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Copy to ChatGPT", "Prompt copied to clipboard.")
 
     def _handle_analysis_result(self, text: str) -> None:
-        self._chat_view.add_message("Assistant", text, role="assistant")
+        self.analysis_tab.add_assistant_message(text)
 
     def _handle_analysis_error(self, message: str) -> None:
-        self._chat_view.add_message("Error", f"Analysis failed: {message}", role="error", is_error=True)
+        self.analysis_tab.add_error_message(f"Analysis failed: {message}")
 
     def _handle_analysis_finished(self) -> None:
         self._set_analysis_busy(False)
@@ -406,22 +407,16 @@ class MainWindow(QMainWindow):
             return
         text = self._chat_input.toPlainText().strip()
         if not text:
-            self._chat_view.add_message("System", "Enter a question to send.", role="error", is_error=True)
+            self.analysis_tab.add_error_message("Enter a question to send.")
             return
         if not self._state.search_matches:
-            self._chat_view.add_message("Error", "Run a search and select results before chatting.", role="error", is_error=True)
+            self.analysis_tab.add_error_message("Run a search and select results before chatting.")
             return
 
-        self._chat_view.add_message("You", text, role="user")
+        self.analysis_tab.add_user_message(text)
         self._chat_input.clear()
-        top_n = self._chunk_count.value()
-        self._state.current_query = text
-        worker = _AIAnalyzeRunnable(
-            self._ai_service,
-            text,
-            self._state.search_matches,
-            top_n,
-        )
+        messages = self._build_chat_messages()
+        worker = ChatRunnable(self._ai_service, messages)
         worker.signals.result.connect(self._handle_analysis_result)
         worker.signals.error.connect(self._handle_analysis_error)
         worker.signals.finished.connect(self._handle_analysis_finished)
@@ -430,6 +425,18 @@ class MainWindow(QMainWindow):
         self._analysis_loading.setVisible(True)
         self._analysis_loading.setText("Sending...")
         self._thread_pool.start(worker)
+
+    def _build_chat_messages(self) -> list[dict]:
+        """Construct chat history with system prompt and limited context."""
+        system_message = {
+            "role": "system",
+            "content": (
+                "You are a research assistant helping summarize and discuss academic papers. "
+                "Keep answers concise and cite specifics when possible."
+            ),
+        }
+        history = self.analysis_tab.get_history()
+        return [system_message, *history]
 
     def _set_analysis_busy(self, busy: bool) -> None:
         self._analyze_button.setProperty("busy", busy)
