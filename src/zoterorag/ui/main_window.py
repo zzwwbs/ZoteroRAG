@@ -302,7 +302,13 @@ class MainWindow(QMainWindow):
         worker.signals.progress.connect(self._handle_indexing_progress)
         worker.signals.finished.connect(self._handle_indexing_finished)
         worker.signals.token_usage.connect(self.token_usage_recorded.emit)
+        worker.signals.status.connect(self._handle_index_status_update)
         self._indexing_scope_view.set_busy(True)
+        self._indexed_count = 0
+        self._no_pdf_count = 0
+        self._error_count = 0
+        self._processed_count = 0
+        self.index_tab.update_summary("")
         self._thread_pool.start(worker)
 
     def _cancel_indexing_task(self) -> None:
@@ -325,9 +331,43 @@ class MainWindow(QMainWindow):
             self.index_tab.show_idle()
 
     def _handle_indexing_finished(self) -> None:
+        was_cancelled = self._cancel_requested
         self._cancel_requested = False
         self._indexing_scope_view.set_busy(False)
         self.index_tab.show_idle()
+        summary = (
+            f"Processed: {self._processed_count} | "
+            f"✅ Indexed: {self._indexed_count} | "
+            f"⚠️ No PDF: {self._no_pdf_count} | "
+            f"❌ Errors: {self._error_count}"
+        )
+        if was_cancelled:
+            summary += " (Cancelled)"
+        self.index_tab.update_summary(summary)
+
+    def _handle_index_status_update(self, payload: dict) -> None:
+        """Handle per-paper status updates emitted during indexing."""
+        try:
+            zotero_key = payload.get("zotero_key")
+            status = payload.get("status", "Not Indexed")
+            # Refresh library view status map lazily; requires reloading items statuses
+            status_map: dict[str, str] = {}
+            try:
+                status_map = {payload["zotero_key"]: status}
+            except Exception:
+                status_map = {}
+            if status_map and zotero_key:
+                self._library_view._table_model.update_status(zotero_key, status)
+            # Count tracking
+            self._processed_count += 1
+            if status == "Indexed":
+                self._indexed_count += 1
+            elif status == "No PDF":
+                self._no_pdf_count += 1
+            elif status == "PDF Error":
+                self._error_count += 1
+        except Exception:
+            logger.exception("Failed to handle status update payload: %s", payload)
 
     def _on_search(self, query: str, count: int) -> None:
         worker = _SearchRunnable(self._search_service, query, count)
@@ -686,6 +726,7 @@ class _IndexingWorkerSignals(QObject):
     progress = Signal(dict)
     finished = Signal()
     token_usage = Signal(object)
+    status = Signal(dict)
 
 
 class _IndexingRunnable(QRunnable):
@@ -701,10 +742,12 @@ class _IndexingRunnable(QRunnable):
         try:
             self._service.set_progress_callback(self.signals.progress.emit)
             self._service.set_usage_callback(self.signals.token_usage.emit)
+            self._service.set_status_callback(self.signals.status.emit)
             self._service.start_indexing(self._scope)
         finally:
             self._service.set_progress_callback(None)
             self._service.set_usage_callback(None)
+            self._service.set_status_callback(None)
             self.signals.finished.emit()
 
 
