@@ -28,3 +28,6 @@ def test_retrieval_toggle_enables_spinbox(qapp):
     assert tab.chunk_spinbox.minimum() == 1
     assert tab.chunk_spinbox.maximum() == 20
     assert tab.chunk_spinbox.value() == 5
+    assert tab.history_spinbox.minimum() == 1
+    assert tab.history_spinbox.maximum() == 50
+    assert tab.history_spinbox.value() == 10

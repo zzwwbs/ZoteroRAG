@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget, QSizePolicy
 
 from .chat_message_widget import ChatMessageWidget
 
@@ -18,6 +18,7 @@ class ChatView(QWidget):
         self._scroll_area = QScrollArea()
         self._scroll_area.setWidgetResizable(True)
         self._content = QWidget()
+        self._content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         self._layout = QVBoxLayout(self._content)
         self._layout.setSpacing(8)
         self._layout.addStretch()

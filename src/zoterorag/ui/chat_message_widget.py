@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget, QSizePolicy
 from PySide6.QtCore import Qt
 
 
@@ -22,22 +22,21 @@ class ChatMessageWidget(QWidget):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         ts = timestamp or datetime.now()
         header = QLabel(f"{sender} • {ts.strftime('%Y-%m-%d %H:%M')}")
         header.setObjectName("chatHeader")
-        header.setAlignment(Qt.AlignLeft if role != "user" else Qt.AlignRight)
+        header.setAlignment(Qt.AlignLeft)
 
         body = QLabel(content)
         body.setWordWrap(True)
         body.setTextInteractionFlags(body.textInteractionFlags() | Qt.TextSelectableByMouse)
         body.setObjectName("chatBody")
+        body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
-        if role == "user":
-            layout.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        else:
-            layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         layout.addWidget(header)
         layout.addWidget(body)
 
