@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS documents (
     authors TEXT,
     year INTEGER,
     pdf_file_path TEXT NOT NULL,
-    indexed_at TEXT NOT NULL
+    indexed_at TEXT NOT NULL,
+    indexing_status TEXT DEFAULT 'Not Indexed'
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_zotero_item_key ON documents (zotero_item_key);
@@ -62,10 +63,10 @@ class MetadataDBManager:
         connection = self._get_connection()
         connection.executescript(SCHEMA_SQL)
         connection.commit()
-        self._ensure_token_usage_columns(connection)
+        self._ensure_additional_columns(connection)
 
-    def _ensure_token_usage_columns(self, connection: sqlite3.Connection) -> None:
-        """Add missing token_usage columns for existing installs."""
+    def _ensure_additional_columns(self, connection: sqlite3.Connection) -> None:
+        """Add missing columns for existing installs."""
 
         # Check if token_usage table exists first
         table_exists = connection.execute(
@@ -83,6 +84,15 @@ class MetadataDBManager:
             connection.execute("ALTER TABLE token_usage ADD COLUMN prompt_tokens INTEGER DEFAULT 0")
         if "completion_tokens" not in columns:
             connection.execute("ALTER TABLE token_usage ADD COLUMN completion_tokens INTEGER DEFAULT 0")
+        # Documents indexing_status
+        doc_columns = {
+            row["name"]: True
+            for row in connection.execute("PRAGMA table_info(documents)").fetchall()
+        }
+        if "indexing_status" not in doc_columns:
+            connection.execute(
+                "ALTER TABLE documents ADD COLUMN indexing_status TEXT DEFAULT 'Not Indexed'"
+            )
         connection.commit()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -92,7 +102,7 @@ class MetadataDBManager:
             self._local.connection.row_factory = sqlite3.Row
             self._local.connection.execute("PRAGMA foreign_keys = ON")
             # Ensure latest schema for new thread connections
-            self._ensure_token_usage_columns(self._local.connection)
+            self._ensure_additional_columns(self._local.connection)
         return self._local.connection
 
     def close(self) -> None:

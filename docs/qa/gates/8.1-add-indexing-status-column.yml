@@ -1,0 +1,137 @@
+schema: 1
+story: '8.1'
+story_title: 'Add Indexing Status Column to Paper List in Index Tab'
+gate: CONCERNS
+status_reason: 'Excellent implementation with complete AC coverage, but critical method name bug causes test failures. Simple 15-minute fix required.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-01-15T10:30:00Z'
+
+top_issues:
+  - id: 'BUG-001'
+    severity: high
+    finding: 'Method name mismatch in metadata_db_manager.py line 105: calls _ensure_token_usage_columns but method is named _ensure_additional_columns'
+    suggested_action: 'Change line 105 to call self._ensure_additional_columns(self._local.connection)'
+    suggested_owner: dev
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'test_library_status_column.py creates ZoteroItem with outdated parameters (item_type, date_added, etc.)'
+    suggested_action: 'Update _item() helper to match current ZoteroItem signature: (item_id, item_key, title, authors, year)'
+    suggested_owner: dev
+  - id: 'TEST-002'
+    severity: low
+    finding: 'Manual sorting and regression tests not completed per Task 5'
+    suggested_action: 'Manually verify custom sort order and Index Tab regression test'
+    suggested_owner: qa
+
+waiver: 
+  active: false
+
+quality_score: 85
+expires: '2025-01-29T10:30:00Z'
+
+evidence:
+  tests_reviewed: 11
+  tests_passing: 8
+  tests_failing: 3
+  ac_coverage: 5
+  
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'No security concerns - local status display only'
+  performance:
+    status: PASS
+    notes: 'Excellent bulk retrieval design with get_status_by_keys() prevents N+1 queries'
+  reliability:
+    status: CONCERNS
+    notes: 'Critical bug breaks database initialization - must fix before production'
+  maintainability:
+    status: PASS
+    notes: 'Excellent code quality with clean architecture and proper separation of concerns'
+
+acceptance_criteria:
+  ac1_status_column:
+    status: PASS
+    implementation: 'Status column (column 3) in LibraryTableModel with custom priority sorting'
+    evidence: 'library_view.py lines 14-67'
+  ac2_status_values:
+    status: PASS
+    implementation: 'All 4 status values mapped in _format_status()'
+    evidence: 'library_view.py lines 61-67'
+  ac3_visual_indicators:
+    status: PASS
+    implementation: 'Unicode icons (⚪ ✅ ⚠️ ❌) with accessible colors'
+    evidence: 'library_view.py _format_status() method'
+  ac4_default_state:
+    status: PASS
+    implementation: 'Default "Not Indexed" in Document dataclass and DB schema'
+    evidence: 'models.py line 18, metadata_db_manager.py schema'
+  ac5_column_behavior:
+    status: PASS
+    implementation: 'Auto-sized, resizable, reorderable via QTableView standard behavior'
+    evidence: 'library_view.py lines 86-87'
+
+tasks:
+  task1_data_model:
+    status: COMPLETE
+    notes: 'indexing_status field added to Document with correct default'
+  task2_migration:
+    status: COMPLETE
+    notes: 'Migration script created, inline migration handler implemented'
+  task3_ui_column:
+    status: COMPLETE
+    notes: 'Status column with icons, colors, and custom sorting fully implemented'
+  task4_persistence:
+    status: COMPLETE
+    notes: 'Repository methods for insert, update, and bulk retrieval all working'
+  task5_testing:
+    status: PARTIAL
+    notes: 'Model test passes, UI test exists but fails (test code issue), manual tests pending'
+
+recommendations:
+  immediate:
+    - action: 'Fix metadata_db_manager.py line 105 method name'
+      refs: ['src/zoterorag/core/services/metadata_db_manager.py']
+      priority: 'CRITICAL'
+    - action: 'Fix test_library_status_column.py ZoteroItem initialization'
+      refs: ['tests/ui/test_library_status_column.py']
+      priority: 'HIGH'
+  future:
+    - action: 'Complete manual sorting verification'
+      refs: ['Story 8.1 Task 5']
+      priority: 'LOW'
+    - action: 'Perform Index Tab regression testing'
+      refs: ['Story 8.1 Task 5']
+      priority: 'LOW'
+
+architecture_notes: |
+  Excellent architectural design with proper separation of concerns:
+  - Data model layer: Clean dataclass with appropriate default
+  - Database layer: Proper schema with migration support
+  - Repository layer: Well-designed with bulk retrieval optimization
+  - UI layer: Clean Qt model/view pattern with custom sorting
+  - Integration: Main window properly orchestrates status loading
+  
+  The bulk status retrieval design (get_status_by_keys) shows excellent 
+  performance awareness, preventing potential N+1 query problems when 
+  rendering large libraries.
+
+code_quality_highlights:
+  - Clean separation between layers (model, repository, UI)
+  - Defensive coding with fallback handling
+  - Accessibility-minded color choices
+  - Efficient bulk data retrieval
+  - Proper Qt model/view pattern usage
+  - Thread-safe database connection management
+
+migration_notes: |
+  Implementation uses dual approach:
+  1. Inline migration in _ensure_additional_columns() for runtime checks
+  2. Version-controlled SQL script (001_add_indexing_status.sql) for documentation
+  
+  The inline approach ensures schema compatibility on every connection,
+  which is appropriate for this desktop application scenario.

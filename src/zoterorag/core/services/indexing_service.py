@@ -123,11 +123,13 @@ class IndexingService:
             except EmbeddingClientError as error:
                 payload["status"] = "error"
                 payload["error_message"] = str(error)
+                self._record_status(item, "PDF Error")
                 self._emit_progress(payload)
             except Exception as error:
                 logger.exception("Failed to index item %s", item.item_id)
                 payload["status"] = "error"
                 payload["error_message"] = str(error)
+                self._record_status(item, "PDF Error")
                 self._emit_progress(payload)
             if self._cancel_event.is_set():
                 break
@@ -152,6 +154,7 @@ class IndexingService:
     def _process_item(self, item: ZoteroItem, embedding_client: EmbeddingClient) -> None:
         pdf_paths = self._zotero_manager.get_pdf_attachments(item.item_id)
         if not pdf_paths:
+            self._record_status(item, "No PDF")
             return
 
         document = Document(
@@ -198,10 +201,30 @@ class IndexingService:
 
         if vectors:
             self._vector_manager.add_vectors(vectors, vector_ids)
+            self._record_status(item, "Indexed")
+        else:
+            self._record_status(item, "PDF Error")
 
     def _is_already_indexed(self, item: ZoteroItem) -> bool:
         existing = self._metadata_manager.get_document_by_key(item.item_key or str(item.item_id))
         return existing is not None
+
+    def _record_status(self, item: ZoteroItem, status: str) -> None:
+        """Ensure a document row exists and set indexing status."""
+        repo = self._metadata_manager.document_repository
+        existing = repo.get_by_zotero_key(item.item_key or str(item.item_id))
+        if existing:
+            repo.update_status(item.item_key or str(item.item_id), status)
+            return
+        doc = Document(
+            zotero_item_key=item.item_key or str(item.item_id),
+            title=item.title,
+            authors=[name.strip() for name in item.authors.split(";") if name.strip()],
+            year=int(item.year) if item.year.isdigit() else None,
+            pdf_file_path="",
+            indexing_status=status,
+        )
+        repo.insert(doc)
 
     def _emit_progress(self, payload: Dict[str, Any]) -> None:
         if self._progress_callback:

@@ -39,6 +39,11 @@ class DummyDocumentRepository:
     def get_by_zotero_key(self, key: str) -> Document | None:
         return self._store.get(key)
 
+    def update_status(self, zotero_key: str, status: str) -> None:
+        """Update the indexing status of a document."""
+        if zotero_key in self._store:
+            self._store[zotero_key].indexing_status = status
+
 
 class DummyChunkRepository:
     def __init__(self) -> None:

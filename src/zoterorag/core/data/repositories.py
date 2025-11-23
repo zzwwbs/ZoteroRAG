@@ -20,8 +20,8 @@ class DocumentRepository:
         indexed_at = document.indexed_at.isoformat()
         cursor = self._connection.execute(
             """
-            INSERT INTO documents (zotero_item_key, title, authors, year, pdf_file_path, indexed_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO documents (zotero_item_key, title, authors, year, pdf_file_path, indexed_at, indexing_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 document.zotero_item_key,
@@ -30,6 +30,7 @@ class DocumentRepository:
                 document.year,
                 document.pdf_file_path,
                 indexed_at,
+                document.indexing_status,
             ),
         )
         self._connection.commit()
@@ -63,6 +64,16 @@ class DocumentRepository:
         ).fetchall()
         return [self._row_to_document(row) for row in rows]
 
+    def get_status_by_keys(self, zotero_keys: list[str]) -> dict[str, str]:
+        if not zotero_keys:
+            return {}
+        placeholders = ",".join("?" for _ in zotero_keys)
+        rows = self._connection.execute(
+            f"SELECT zotero_item_key, indexing_status FROM documents WHERE zotero_item_key IN ({placeholders})",
+            tuple(zotero_keys),
+        ).fetchall()
+        return {row["zotero_item_key"]: row["indexing_status"] for row in rows if "indexing_status" in row.keys()}
+
     def _row_to_document(self, row: sqlite3.Row) -> Document:
         authors = json.loads(row["authors"]) if row["authors"] else []
         indexed_at = datetime.fromisoformat(row["indexed_at"])
@@ -74,7 +85,15 @@ class DocumentRepository:
             year=row["year"],
             pdf_file_path=row["pdf_file_path"],
             indexed_at=indexed_at,
+            indexing_status=row["indexing_status"] if "indexing_status" in row.keys() else "Not Indexed",
         )
+
+    def update_status(self, zotero_key: str, status: str) -> None:
+        self._connection.execute(
+            "UPDATE documents SET indexing_status = ? WHERE zotero_item_key = ?",
+            (status, zotero_key),
+        )
+        self._connection.commit()
 
 
 class ChunkRepository:

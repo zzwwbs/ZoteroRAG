@@ -17,6 +17,7 @@ class Document:
     year: int | None = None
     pdf_file_path: str = ""
     indexed_at: datetime = field(default_factory=datetime.utcnow)
+    indexing_status: str = "Not Indexed"
     id: int | None = None
 
 

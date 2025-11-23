@@ -204,7 +204,13 @@ class MainWindow(QMainWindow):
         self._zotero_manager.set_zotero_path(zotero_path)
         try:
             items = self._zotero_manager.get_all_items()
-            self._library_view.set_items(items)
+            status_map: dict[str, str] = {}
+            try:
+                keys = [it.item_key for it in items]
+                status_map = self._metadata_manager.document_repository.get_status_by_keys(keys)
+            except Exception:
+                logger.exception("Failed to load document statuses")
+            self._library_view.set_items(items, status_map)
             collections = self._zotero_manager.get_collections()
             total_papers = self._zotero_manager.get_total_paper_count()
             collection_counts = self._zotero_manager.get_collection_paper_counts()
