@@ -436,7 +436,25 @@ class MainWindow(QMainWindow):
             ),
         }
         history = self.analysis_tab.get_history()
-        return [system_message, *history]
+
+        messages: list[dict] = [system_message]
+
+        if self.analysis_tab.include_context_checkbox.isChecked() and self._state.search_matches:
+            limit = self.analysis_tab.chunk_spinbox.value()
+            context_lines: list[str] = []
+            for idx, match in enumerate(self._state.search_matches[:limit], start=1):
+                doc = match.document
+                title = doc.title if doc else "Unknown title"
+                authors = ", ".join(doc.authors) if doc and doc.authors else "Unknown authors"
+                snippet = match.chunk.content.replace("\n", " ").strip()
+                context_lines.append(
+                    f"{idx}. {title} ({authors}) - Page {match.chunk.page_number}: {snippet}"
+                )
+            context_block = "Context from search results:\n" + "\n".join(context_lines)
+            messages.append({"role": "system", "content": context_block})
+
+        messages.extend(history)
+        return messages
 
     def _set_analysis_busy(self, busy: bool) -> None:
         self._analyze_button.setProperty("busy", busy)

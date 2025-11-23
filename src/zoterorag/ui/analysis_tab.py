@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QTextEdit
+from PySide6.QtWidgets import (
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QHBoxLayout,
+    QTextEdit,
+    QCheckBox,
+    QSpinBox,
+)
 
 from .chat_view import ChatView
 
@@ -24,9 +33,28 @@ class AnalysisTab(QWidget):
         self.chat_view = ChatView()
         self.chat_input = QTextEdit()
         self.chat_input.setPlaceholderText("Type a follow-up question…")
-        self.chat_input.setFixedHeight(80)
+        self.chat_input.setMinimumHeight(80)
         self.send_button = QPushButton("Send")
         self.send_button.setToolTip("Send a new question based on current search results.")
+
+        self.include_context_checkbox = QCheckBox("Include search context")
+        self.include_context_checkbox.setChecked(True)
+        self.include_context_checkbox.setToolTip("Include relevant paper excerpts in AI analysis.")
+        self.chunk_spinbox = QSpinBox()
+        self.chunk_spinbox.setRange(1, 20)
+        self.chunk_spinbox.setValue(5)
+        self.chunk_spinbox.setEnabled(True)
+
+        def _toggle_chunks(checked: bool) -> None:
+            self.chunk_spinbox.setEnabled(checked)
+
+        self.include_context_checkbox.toggled.connect(_toggle_chunks)
+
+        controls_row = QHBoxLayout()
+        controls_row.addWidget(self.include_context_checkbox)
+        controls_row.addWidget(QLabel("Number of chunks:"))
+        controls_row.addWidget(self.chunk_spinbox)
+        controls_row.addStretch()
 
         input_row = QHBoxLayout()
         input_row.addWidget(self.chat_input, stretch=1)
@@ -35,6 +63,7 @@ class AnalysisTab(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.analyze_button)
         layout.addWidget(self.loading_label)
+        layout.addLayout(controls_row)
         layout.addWidget(self.chat_view)
         layout.addLayout(input_row)
         layout.addStretch()

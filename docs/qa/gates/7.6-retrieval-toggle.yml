@@ -1,0 +1,122 @@
+schema: 1
+story: '7.6'
+story_title: 'Add Retrieval Toggle & Chunk Count Control'
+gate: PASS
+status_reason: 'Excellent implementation with all 7 acceptance criteria met, comprehensive UI controls, seamless integration with chat infrastructure, and strong manual test validation.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2025-11-23T16:15:00Z'
+quality_score: 95
+
+top_issues: []
+
+waiver:
+  active: false
+
+evidence:
+  tests_reviewed: 6
+  tests_passed: 6
+  pass_rate: 100
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+nfr_validation:
+  _assessed: [usability, performance, maintainability]
+  usability:
+    status: PASS
+    notes: 'Intuitive toggle controls, clear tooltips, proper affordances with disabled spinbox, reasonable defaults'
+  performance:
+    status: PASS
+    notes: 'Retrieval only when needed, chunk limit prevents excessive context, efficient list slicing'
+  maintainability:
+    status: PASS
+    notes: 'Clean separation of concerns, follows existing patterns, well-integrated with chat infrastructure'
+
+test_validation:
+  unit_tests:
+    - test: 'test_retrieval_toggle_enables_spinbox'
+      status: PASSED
+      coverage: 'QCheckBox and QSpinBox control behavior with default values'
+    - test: 'test_chat_message_widget_sets_role_and_timestamp'
+      status: PASSED
+      coverage: 'Message widget styling and formatting'
+    - test: 'test_chat_view_adds_and_clears_messages'
+      status: PASSED
+      coverage: 'Chat view message management'
+    - test: 'test_history_appends_and_truncates'
+      status: PASSED
+      coverage: 'Conversation history with 10-message limit'
+    - test: 'test_assistant_messages_recorded'
+      status: PASSED
+      coverage: 'Assistant message recording to history'
+    - test: 'test_chat_returns_content_and_usage'
+      status: PASSED
+      coverage: 'AI service chat method integration'
+
+implementation_quality:
+  ui_controls: EXCELLENT
+  context_retrieval: EXCELLENT
+  state_management: EXCELLENT
+  integration: EXCELLENT
+  usability: EXCELLENT
+  test_coverage: STRONG
+
+manual_testing:
+  toggle_on_behavior:
+    status: VERIFIED
+    notes: 'Context retrieval works correctly with formatted title/authors/page/content'
+  toggle_off_behavior:
+    status: VERIFIED
+    notes: 'No retrieval when unchecked, spinbox properly disabled'
+  chunk_count_control:
+    status: VERIFIED
+    notes: 'Spinbox values (1-20) correctly limit retrieved chunks'
+  ui_layout:
+    status: VERIFIED
+    notes: 'Controls positioned logically, tooltip present, scrollable chat, word-wrapped messages'
+  default_values:
+    status: VERIFIED
+    notes: 'Toggle ON and chunk count 5 on initialization'
+
+context_formatting:
+  format_quality: EXCELLENT
+  example: |
+    Context from search results:
+    1. Paper Title (Authors) - Page X: chunk content...
+    2. Paper Title (Authors) - Page Y: chunk content...
+  includes:
+    - Numbered list for clarity
+    - Paper title from document metadata
+    - Authors list (comma-separated)
+    - Page number for reference
+    - Chunk content (newlines replaced)
+    - Fallbacks for missing metadata
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Add integration tests for _build_chat_messages conditional logic'
+      priority: medium
+    - action: 'Add visual indicator in message showing chunk count included'
+      priority: low
+    - action: 'Consider persisting toggle/chunk preferences across sessions'
+      priority: low
+    - action: 'Add relevance score filter for chunk selection'
+      priority: low
+
+epic_completion:
+  epic: 'Epic 7: Enhanced AI Configuration & Chat Experience'
+  stories_complete: 6
+  stories_total: 6
+  points_complete: 21
+  points_total: 21
+  completion_percentage: 100
+  status: COMPLETE
+
+files_modified:
+  - 'src/zoterorag/ui/analysis_tab.py'
+  - 'src/zoterorag/ui/main_window.py'
+
+files_added:
+  - 'tests/ui/test_analysis_controls.py'
