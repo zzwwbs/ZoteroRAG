@@ -47,13 +47,13 @@ so that **I can see my Zotero data within the app**.
 ### Story 1.4: Extract Text from Attached PDFs
 
 As a **user**,
-I want the app to **identify PDF attachments for Zotero items and extract their text content using pdfplumber**,
+I want the app to **identify PDF attachments for Zotero items and extract their text content using pypdfium2**,
 so that **the text can be prepared for indexing**.
 
-#### Acceptance Criteria
+##### Acceptance Criteria
 
 1.  1.4.1: For each Zotero item with a PDF attachment, the application can locate the PDF file in the `storage/` directory.
-2.  1.4.2: The application successfully extracts text content from a sample PDF using pdfplumber.
+2.  1.4.2: The application successfully extracts text content from a sample PDF using pypdfium2.
 3.  1.4.3: The application logs errors for PDFs from which text extraction fails, but continues processing other PDFs.
 4.  1.4.4: The extracted text is available for subsequent processing steps.
 

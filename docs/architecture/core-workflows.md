@@ -35,7 +35,7 @@ sequenceDiagram
         IS->>ZM: get_all_documents()
         activate ZM
         ZM->>ZM: Reads zotero.sqlite & Locates PDFs
-        ZM->>ZM: Extracts text from PDFs (pdfplumber)
+        ZM->>ZM: Extracts text from PDFs (pypdfium2)
         ZM-->>IS: Returns list of (Document, ExtractedText)
         deactivate ZM
 

@@ -1,6 +1,6 @@
 # 5. Epic List
 
-*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using pdfplumber.
+*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using pypdfium2.
 *   **Epic 2: Indexing & Local Vector Store:** Implement the text chunking, cloud embedding API calls (OpenAI by default), and local vector database (FAISS + SQLite) for storing embeddings and metadata, delivering the ability to build and incrementally update the semantic index.
 *   **Epic 3: Semantic Search & Results Display:** Develop the natural language query processing, retrieval from the local vector store, and the UI for displaying relevant chunks and source papers, delivering the core semantic search functionality.
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
@@ -9,4 +9,5 @@
 *   **Epic 7: Enhanced AI Configuration & Chat Experience:** Enable flexible AI provider configuration and transform AI Analysis into an interactive chat interface with user-controlled retrieval.
 *   **Epic 8: Indexing & Search UX Improvements:** Improve visibility of indexing status and optimize post-indexing workflow by adding real-time status tracking, indexing summaries, and better default navigation.
 *   **Epic 9: Search Tab Action Reorganization:** Improve Search tab button layout and labeling clarity by moving action buttons to the bottom and renaming the ChatGPT export button.
-*   **Epic 10: PDF Library Migration:** This epic addresses the need to migrate the PDF extraction library from PyMuPDF to pdfplumber to resolve licensing issues.
+*   **Epic 10: PDF Library Migration (Superseded by Epic 11):** Replace the `PyMuPDF` library with `pdfplumber` to resolve licensing issues.
+*   **Epic 11: Performance-Oriented PDF Library Migration:** Replace the `pdfplumber` library with the more performant `pypdfium2` to improve indexing speed and reduce resource consumption.

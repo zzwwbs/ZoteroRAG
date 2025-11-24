@@ -24,6 +24,7 @@ ZoteroRAG Desk solves this by providing a desktop-first, local-first application
 | 2025-11-22 | 1.1 | Added Epic 6 for UX enhancements based on user feedback. | John (PM) |
 | 2025-11-22 | 1.2 | Added Epics 7, 8, and 9 for post-MVP UX and AI enhancements. | John (PM) |
 | 2025-11-23 | 1.3 | Replaced PyMuPDF with pdfplumber and added Epic 10 for migration. | John (PM) |
+| 2025-11-24 | 1.4 | Added Epic 11 to replace pdfplumber with PyPDFium2 for performance improvements. | John (PM) |
 
 ## 2. Requirements
 
@@ -124,7 +125,7 @@ Testing will include both unit tests for individual components and integration t
 
 *   **Language:** Python 3.13+
 *   **GUI Framework:** PySide6
-*   **PDF Extraction Library:** pdfplumber
+*   **PDF Extraction Library:** pypdfium2
 *   **Cloud Embedding API:** OpenAI embeddings as default, with the ability for users to configure other compatible API endpoints.
 *   **Local Vector Database:** FAISS
 *   **Local Metadata Storage:** SQLite (for storing chunk metadata and Zotero item information, complementing FAISS for vector storage)
@@ -134,7 +135,7 @@ Testing will include both unit tests for individual components and integration t
 
 ## 5. Epic List
 
-*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using pdfplumber.
+*   **Epic 1: Foundation & Zotero Integration:** Establish the core application structure, UI framework (PySide6), and read-only integration with the local Zotero database and PDF files, enabling basic PDF text extraction using pypdfium2.
 *   **Epic 2: Indexing & Local Vector Store:** Implement the text chunking, cloud embedding API calls (OpenAI by default), and local vector database (FAISS + SQLite) for storing embeddings and metadata, delivering the ability to build and incrementally update the semantic index.
 *   **Epic 3: Semantic Search & Results Display:** Develop the natural language query processing, retrieval from the local vector store, and the UI for displaying relevant chunks and source papers, delivering the core semantic search functionality.
 *   **Epic 4: AI Integration & Export Workflows:** Implement the BYOK LLM integration for in-app analysis and the various export functionalities (ChatGPT prompt, relevant PDF paths), delivering advanced interaction and sharing capabilities.
@@ -143,6 +144,8 @@ Testing will include both unit tests for individual components and integration t
 *   **Epic 7: Enhanced AI Configuration & Chat Experience:** Enable flexible AI provider configuration and transform AI Analysis into an interactive chat interface with user-controlled retrieval.
 *   **Epic 8: Indexing & Search UX Improvements:** Improve visibility of indexing status and optimize post-indexing workflow by adding real-time status tracking, indexing summaries, and better default navigation.
 *   **Epic 9: Search Tab Action Reorganization:** Improve Search tab button layout and labeling clarity by moving action buttons to the bottom and renaming the ChatGPT export button.
+*   **Epic 10: PDF Library Migration (Superseded by Epic 11):** Replace the `PyMuPDF` library with `pdfplumber` to resolve licensing issues.
+*   **Epic 11: Performance-Oriented PDF Library Migration:** Replace the `pdfplumber` library with the more performant `pypdfium2` to improve indexing speed and reduce resource consumption.
 
 ## 5.1. Out of Scope for MVP
 
@@ -210,13 +213,13 @@ so that **I can see my Zotero data within the app**.
 #### Story 1.4: Extract Text from Attached PDFs
 
 As a **user**,
-I want the app to **identify PDF attachments for Zotero items and extract their text content using pdfplumber**,
+I want the app to **identify PDF attachments for Zotero items and extract their text content using pypdfium2**,
 so that **the text can be prepared for indexing**.
 
 ##### Acceptance Criteria
 
 1.  1.4.1: For each Zotero item with a PDF attachment, the application can locate the PDF file in the `storage/` directory.
-2.  1.4.2: The application successfully extracts text content from a sample PDF using pdfplumber.
+2.  1.4.2: The application successfully extracts text content from a sample PDF using pypdfium2.
 3.  1.4.3: The application logs errors for PDFs from which text extraction fails, but continues processing other PDFs.
 4.  1.4.4: The extracted text is available for subsequent processing steps.
 
@@ -800,6 +803,8 @@ so that **the interface is cleaner and I can easily find the actions I need**.
 
 ### Epic 10: PDF Library Migration
 
+> **_Note: This epic has been superseded by Epic 11._**
+
 
 
 #### Expanded Goal:
@@ -859,3 +864,35 @@ so that **the application remains responsive and reliable**.
 3.  10.2.3: Integration tests for the indexing process pass successfully with the new library.
 
 4.  10.2.4: Error handling for corrupted or unreadable PDFs is robust.
+
+### Epic 11: Performance-Oriented PDF Library Migration
+
+#### Expanded Goal:
+
+This epic addresses the performance limitations observed with the `pdfplumber` library. The goal is to migrate the PDF extraction implementation to `pypdfium2`, a library known for higher performance and efficiency, to significantly improve indexing speed and reduce resource consumption, directly addressing a key performance bottleneck.
+
+#### Story 11.1: Replace PDF Extraction with PyPDFium2
+
+As a **developer**,
+I want to **replace the `pdfplumber`-based text extraction with a `pypdfium2`-based implementation**,
+so that **the application's PDF processing is faster and more efficient**.
+
+##### Acceptance Criteria
+
+1.  11.1.1: All code referencing `pdfplumber` is removed and replaced with `pypdfium2` equivalents.
+2.  11.1.2: The application successfully extracts text content from a sample PDF using `pypdfium2`.
+3.  11.1.3: The application logs errors for PDFs from which text extraction fails but continues processing other PDFs.
+4.  11.1.4: The extracted text is available for subsequent processing steps in the same format as the previous implementation.
+
+#### Story 11.2: Benchmark and Verify Performance Gains
+
+As a **user**,
+I want to **ensure that the new PDF extraction library provides a measurable performance improvement**,
+so that **the indexing process is noticeably faster**.
+
+##### Acceptance Criteria
+
+1.  11.2.1: PDF extraction performance with `pypdfium2` is benchmarked against `pdfplumber` using a representative set of 100 documents of varying complexity.
+2.  11.2.2: The new implementation demonstrates at least a 30% reduction in average processing time per document.
+3.  11.2.3: Memory usage during PDF processing is measured and does not exceed previous levels.
+4.  11.2.4: Integration tests for the indexing process pass successfully with the new library, and error handling for corrupted PDFs remains robust.

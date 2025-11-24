@@ -48,8 +48,8 @@
 - `get_all_documents() -> list[Document]`
 - `get_item_pdf_path(document_id) -> str`
 - `extract_text_from_pdf(pdf_path) -> str`
-**Dependencies:** pdfplumber, `sqlite3` (for `zotero.sqlite`).
-**Technology Stack:** Python, pdfplumber.
+**Dependencies:** pypdfium2, `sqlite3` (for `zotero.sqlite`).
+**Technology Stack:** Python, pypdfium2.
 
 ## IndexingService
 **Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, safe cancellation (Epic 6.2), and provides real-time status updates per paper (Epic 8.2). After completion, it provides a summary of the indexing job (Epic 8.3).

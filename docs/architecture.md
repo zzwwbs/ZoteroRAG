@@ -14,6 +14,7 @@ N/A - This is a greenfield project. The architecture will be designed from the g
 
 | Date | Version | Description | Author |
 | :--- | :--- | :--- | :--- |
+| 2025-11-24 | 0.4 | Updated PDF extraction library from pdfplumber to pypdfium2 to align with PRD v1.4. | Winston (Architect) |
 | 2025-11-22 | 0.3 | Updated architecture for Epics 7, 8, and 9. Introduces chat-based AI, enhanced indexing UX, and reorganized search UI. | Winston (Architect) |
 | 2025-11-22 | 0.2 | Updated architecture to align with PRD v1.1, incorporating major UI/UX enhancements including a tabbed interface, indexing cancellation, and improved results display. | Winston (Architect) |
 | 2025-11-19 | 0.1 | Initial draft based on PRD v1.0. | Winston (Architect) |
@@ -480,8 +481,8 @@ paths:
 - `get_all_documents() -> list[Document]`
 - `get_item_pdf_path(document_id) -> str`
 - `extract_text_from_pdf(pdf_path) -> str`
-**Dependencies:** pdfplumber, `sqlite3` (for `zotero.sqlite`).
-**Technology Stack:** Python, pdfplumber.
+**Dependencies:** pypdfium2, `sqlite3` (for `zotero.sqlite`).
+**Technology Stack:** Python, pypdfium2.
 
 ### IndexingService
 **Responsibility:** Orchestrates the end-to-end process of building and updating the semantic index. This involves fetching documents, extracting text, chunking, generating embeddings, and storing data in the local databases. Handles incremental indexing, progress reporting, safe cancellation (Epic 6.2), and provides real-time status updates per paper (Epic 8.2). After completion, it provides a summary of the indexing job (Epic 8.3).
@@ -658,7 +659,7 @@ sequenceDiagram
         IS->>ZM: get_all_documents()
         activate ZM
         ZM->>ZM: Reads zotero.sqlite & Locates PDFs
-        ZM->>ZM: Extracts text from PDFs (pdfplumber)
+        ZM->>ZM: Extracts text from PDFs (pypdfium2)
         ZM-->>IS: Returns list of (Document, ExtractedText)
         deactivate ZM
 
@@ -1433,7 +1434,7 @@ This architecture adheres to the privacy-first, local-first principles outlined 
 | Risk ID | Risk Description | Likelihood | Impact | Mitigation Strategy |
 | :--- | :--- | :--- | :--- | :--- |
 | R-01 | **Zotero DB Corruption/Lock:** The user's `zotero.sqlite` file is locked or corrupted, preventing the app from reading it. | Medium | Medium | **Mitigation:** Implement robust error handling in `ZoteroManager`. Open the database in read-only mode to minimize lock contention. Display a clear, user-friendly error message guiding the user to close Zotero or check their database integrity. |
-| R-02 | **PDF Parsing Failure:** A PDF is malformed, encrypted, or contains only images, causing `pdfplumber` to fail. | Medium | Low | **Mitigation:** The `IndexingService` will wrap PDF text extraction in a `try-except` block. On failure, it will log the error with the PDF's file path and skip to the next document, ensuring the indexing process is not halted by a single bad file. |
+| R-02 | **PDF Parsing Failure:** A PDF is malformed, encrypted, or contains only images, causing `pypdfium2` to fail. | Medium | Low | **Mitigation:** The `IndexingService` will wrap PDF text extraction in a `try-except` block. On failure, it will log the error with the PDF's file path and skip to the next document, ensuring the indexing process is not halted by a single bad file. |
 | R-03 | **External API Failure:** The OpenAI-compatible API is down, returns an error (e.g., 429, 500), or the user's key is invalid. | Medium | Medium | **Mitigation:** The `EmbeddingClient` and `AIService` will implement retry logic for transient errors (like 429/5xx) and provide immediate, clear feedback to the user for persistent errors (like 401/403). The UI will show actionable error messages. |
 | R-04 | **Large Library Performance:** Initial indexing of a very large library (10,000+ PDFs) is slow and consumes significant resources. | High | Medium | **Mitigation:** 1. **Background Processing:** All indexing runs in a background thread (`QThreadPool`) to keep the UI responsive (NFR5). 2. **Progress Reporting:** The UI will show detailed progress. 3. **Scoped Indexing:** As per the PRD, allow users to index by collection to manage time/cost. 4. **Incremental Updates:** The `IndexingService` will check `indexed_at` timestamps to only process new or updated items. |
 | R-05 | **Inaccurate Search Results:** Semantic search returns irrelevant chunks due to poor embedding quality or query ambiguity. | Medium | High | **Mitigation:** 1. **Good Defaults:** Use a well-regarded default embedding model. 2. **Chunking Strategy:** Tune the chunk size and overlap to optimize for semantic meaning. 3. **User Feedback:** While not in the MVP, future versions could incorporate user feedback on result quality to refine queries or ranking. |

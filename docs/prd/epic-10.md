@@ -1,3 +1,5 @@
+> **_Note: This epic has been superseded by Epic 11._**
+
 ### Epic 10: PDF Library Migration
 
 

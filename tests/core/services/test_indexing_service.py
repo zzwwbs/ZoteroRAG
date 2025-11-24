@@ -205,3 +205,41 @@ def test_indexing_service_cancels_after_current_item():
     assert len(embedding_client.requests) == 1
     assert progress_events[-1]["status"] == "cancelled"
     assert vector_manager.saved
+
+
+def test_indexing_service_handles_corrupted_pdf_and_continues(tmp_path: Path, caplog):
+    items = [
+        ZoteroItem(item_id=1, item_key="AAA", title="Doc A", authors="Author One", year="2022"),
+        ZoteroItem(item_id=2, item_key="BBB", title="Doc B", authors="Author Two", year="2023"),
+    ]
+    good_pdf = tmp_path / "good.pdf"
+    bad_pdf = tmp_path / "corrupt.pdf"
+    good_pdf.write_text("valid")
+    bad_pdf.write_text("bad data")
+    attachments = {1: [good_pdf], 2: [bad_pdf]}
+    metadata = DummyMetadataManager()
+    vector_manager = DummyVectorManager()
+    embedding_client = DummyEmbeddingClient()
+
+    def extractor(path: str) -> str:
+        if "corrupt" in str(path):
+            raise ValueError("corrupted content")
+        return "valid text"
+
+    service = IndexingService(
+        DummyZoteroManager(items, attachments),
+        metadata_manager=metadata,
+        vector_manager=vector_manager,
+        embedding_client=embedding_client,
+        pdf_extractor=extractor,
+        chunker=dummy_chunker,
+    )
+
+    caplog.set_level("ERROR", logger="zoterorag.core.services.indexing_service")
+    service.start_indexing({"type": "all"})
+
+    # Valid PDF was processed and indexed
+    assert any("Failed to index item" in rec.message for rec in caplog.records)
+    assert len(vector_manager.added) == 1
+    assert metadata.document_repository.get_by_zotero_key("AAA").indexing_status == "Indexed"
+    assert metadata.document_repository.get_by_zotero_key("BBB").indexing_status == "PDF Error"

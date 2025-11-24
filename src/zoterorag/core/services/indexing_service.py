@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List
 import threading
@@ -176,7 +177,18 @@ class IndexingService:
 
         page_number = 1
         for pdf_path in pdf_paths:
+            extract_start = time.perf_counter()
             text = self._pdf_extractor(str(pdf_path))
+            extract_elapsed = time.perf_counter() - extract_start
+            # Print extraction timing and size (character count) for visibility during indexing
+            print(
+                f"[PDF Extract] {pdf_path.name if hasattr(pdf_path, 'name') else pdf_path}: "
+                f"{extract_elapsed:.3f}s, {len(text):,} chars",
+                flush=True,
+            )
+            logger.info(
+                "[Index] PDF extracted: path=%s time=%.3fs chars=%d", pdf_path, extract_elapsed, len(text)
+            )
             if not text.strip():
                 continue
 

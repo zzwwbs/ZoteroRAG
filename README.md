@@ -4,7 +4,7 @@ PySide6 desktop client that turns your local Zotero library into a retrieval-aug
 
 ## Highlights
 - Guided onboarding detects your Zotero data directory or lets you pick it manually.
-- Index whole libraries or specific collections; PDF text is extracted with pdfplumber, chunked, embedded, and stored locally in SQLite + FAISS.
+- Index whole libraries or specific collections; PDF text is extracted with pypdfium2, chunked, embedded, and stored locally in SQLite + FAISS.
 - Semantic search across indexed papers with per-paper and per-chunk views, PDF opening, and export of matched PDFs.
 - AI Analysis tab (optional) to summarize search results and chat with context-aware responses; one-click prompt export for ChatGPT.
 - Configurable embedding/chat providers, base URLs, and models; API keys can be stored securely via the OS keyring when available.
