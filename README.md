@@ -90,7 +90,7 @@ Outputs land in `dist/<target>/` with per-platform work directories in `build/<t
 - For headless environments, add `QT_QPA_PLATFORM=offscreen` when running UI tests.
 
 ## Performance
-- **Fast PDF extraction:** Uses pypdfium2 (BSD-3 license) for 7.7x faster text extraction vs. previous pdfplumber implementation
+- **Fast PDF extraction:** Uses pypdfium2 (BSD-3 license) for text extraction
 - **Efficient indexing:** Chunked text with FAISS vector search for semantic retrieval
 - **Local-first:** All processing happens on your machine, only API calls go to your configured endpoints
 
