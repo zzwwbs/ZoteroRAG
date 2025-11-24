@@ -1,4 +1,10 @@
-# BMAD (local only)
+# BMAD and AI agent directories (local dev only - excluded from public branch)
+.bmad-core/
+.claude/
+.gemini/
+.cursor/
+.trae/
+.ai/
 
 # Python
 __pycache__/
@@ -86,6 +92,10 @@ config/local_config.json
 .env
 .env.local
 
+# User data directory (API keys stored here)
+# Note: This lives in ~/.zotero_rag/ outside the repo, but list here for safety
+.zotero_rag/
+
 # FAISS index files
 *.faiss
 *.index
@@ -107,4 +117,20 @@ Desktop.ini
 *.deb
 *.rpm
 *.pkg
+
+# Documentation artifacts (dev only, excluded from public)
+# Note: docs/publish-plan.md kept in main branch for reference
+docs/brief.md
+docs/ux-enhancements-specification.md
+docs/prd/
+docs/architecture/
+docs/stories/
+docs/project/
+docs/qa/
+zotero-rag-prd.md
+
+# Dev configuration files
+opencode.jsonc
+AGENTS.md
+# Note: CONTRIBUTING.public.md kept in main, becomes CONTRIBUTING.md on public branch
 

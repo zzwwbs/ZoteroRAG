@@ -1,5 +1,10 @@
 # Zotero RAG Desktop
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![PySide6](https://img.shields.io/badge/GUI-PySide6-green.svg)](https://doc.qt.io/qtforpython/)
+[![FAISS](https://img.shields.io/badge/Search-FAISS-orange.svg)](https://github.com/facebookresearch/faiss)
+
 PySide6 desktop client that turns your local Zotero library into a retrieval-augmented research assistant. The app indexes your PDFs locally, runs semantic search via FAISS, and can synthesize answers with any OpenAI-compatible API you configure.
 
 ## Highlights
@@ -84,10 +89,16 @@ Outputs land in `dist/<target>/` with per-platform work directories in `build/<t
   ```
 - For headless environments, add `QT_QPA_PLATFORM=offscreen` when running UI tests.
 
+## Performance
+- **Fast PDF extraction:** Uses pypdfium2 (BSD-3 license) for 7.7x faster text extraction vs. previous pdfplumber implementation
+- **Efficient indexing:** Chunked text with FAISS vector search for semantic retrieval
+- **Local-first:** All processing happens on your machine, only API calls go to your configured endpoints
+
 ## AI-Driven Development Notes
-- Built with an agentic BMAD workflow: planning and documentation by Gemini 2.5 Pro, implementation by Codex (GPT-5.1), and QA by Claude Sonnet 4.5.
-- AI-generated code can surface subtle issues (edge cases, platform-specific packaging, dependency drift). Please open issues with reproduction steps so we can harden the app.
-- GitHub Releases will ship polished bundles for macOS/Windows/Linux alongside source for users who prefer not to manage Python environments.
+- Built with an agentic AI workflow: planning by Gemini 2.5 Pro, implementation by Codex (GPT-5.1), and QA by Claude Sonnet 4.5
+- AI-generated code can surface subtle issues (edge cases, platform-specific packaging, dependency drift)
+- Please open issues with reproduction steps and logs so we can continuously improve
+- GitHub Releases ship polished bundles for macOS/Windows/Linux alongside source
 
 ## Contributing
 Pull requests are welcome. See `CONTRIBUTING.md` for guidelines and workflow details.
